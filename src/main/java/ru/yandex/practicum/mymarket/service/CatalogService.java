@@ -14,12 +14,14 @@ import ru.yandex.practicum.mymarket.repository.ItemRepository;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class CatalogService {
 
     private final ItemRepository itemRepository;
+    private final CartService cartService;
     private static final int ITEMS_PER_ROW = 3;
 
     public CatalogPageResult getItems(String search, SortType sort, int pageNumber, int pageSize) {
@@ -35,7 +37,11 @@ public class CatalogService {
             page = itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(search, search, pageable);
         }
 
-        List<ItemCard> cards = page.getContent().stream().map(this::toItemCard).toList();
+        List<Item> pageItems = page.getContent();
+        List<Long> itemIds = pageItems.stream().map(Item::getId).toList();
+        var counts = cartService.getItemCounts(itemIds);
+
+        List<ItemCard> cards = pageItems.stream().map(item -> toItemCard(item, counts)).toList();
 
         return new CatalogPageResult(
                 splitIntoRows(cards),
@@ -43,8 +49,15 @@ public class CatalogService {
         );
     }
 
-    private ItemCard toItemCard(Item item) {
-        return new ItemCard(item.getId(), item.getTitle(), item.getDescription(), item.getImgPath(), item.getPrice(), 0);
+    private ItemCard toItemCard(Item item, Map<Long, Integer> counts) {
+        return new ItemCard(
+                item.getId(),
+                item.getTitle(),
+                item.getDescription(),
+                item.getImgPath(),
+                item.getPrice(),
+                counts.getOrDefault(item.getId(), 0)
+        );
     }
 
     private Sort toSort(SortType sort) {
