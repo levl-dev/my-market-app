@@ -2,6 +2,7 @@ package ru.yandex.practicum.mymarket.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.dto.Paging;
@@ -10,40 +11,88 @@ import ru.yandex.practicum.mymarket.model.Item;
 import ru.yandex.practicum.mymarket.repository.ItemRepository;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class CatalogService {
 
     private final ItemRepository itemRepository;
+    private final CartService cartService;
     private static final int ITEMS_PER_ROW = 3;
 
-    public Mono<CatalogPageData> getCatalogPage() {
-        return itemRepository.findAll()
+    public Mono<CatalogPageResult> getItems(String search, SortType sort, int pageNumber, int pageSize) {
+        String safeSearch = search == null ? "" : search.trim();
+        SortType safeSort = sort == null ? SortType.NO : sort;
+        int safePageSize = pageSize > 0 ? pageSize : 10;
+
+        return findItems(safeSearch)
                 .collectList()
-                .map(this::toPageData);
+                .flatMap(items -> {
+                    List<Long> itemIds = items.stream().map(Item::getId).toList();
+                    return cartService.getItemCounts(itemIds)
+                            .map(counts -> toPageData(items, counts, safeSearch, safeSort, pageNumber, safePageSize));
+                });
     }
 
-    private CatalogPageData toPageData(List<Item> items) {
-        List<ItemCard> cards = items.stream().map(this::toItemCard).toList();
-        int pageSize = Math.max(cards.size(), 1);
-        return new CatalogPageData(
-                splitIntoRows(cards),
-                "",
-                SortType.NO,
-                new Paging(pageSize, 1, false, false)
+    private Flux<Item> findItems(String search) {
+        if (search.isBlank()) {
+            return itemRepository.findAll();
+        }
+        return itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(search, search);
+    }
+
+    private CatalogPageResult toPageData(
+            List<Item> items,
+            Map<Long, Integer> counts,
+            String search,
+            SortType sort,
+            int pageNumber,
+            int pageSize
+    ) {
+        List<ItemCard> cards = items.stream()
+                .map(item -> toItemCard(item, counts.getOrDefault(item.getId(), 0)))
+                .toList();
+
+        List<ItemCard> sortedCards = sortCards(cards, sort);
+        int pagesCount = Math.max((int) Math.ceil((double) sortedCards.size() / pageSize), 1);
+        int safePageNumber = Math.min(Math.max(pageNumber, 1), pagesCount);
+        int from = (safePageNumber - 1) * pageSize;
+        int to = Math.min(from + pageSize, sortedCards.size());
+        List<ItemCard> pageItems = from < to ? sortedCards.subList(from, to) : List.of();
+
+        return new CatalogPageResult(
+                splitIntoRows(pageItems),
+                search,
+                sort,
+                new Paging(pageSize, safePageNumber, safePageNumber > 1, safePageNumber < pagesCount)
         );
     }
 
-    private ItemCard toItemCard(Item item) {
+    private List<ItemCard> sortCards(List<ItemCard> cards, SortType sort) {
+        if (sort == SortType.ALPHA) {
+            return cards.stream()
+                    .sorted(Comparator.comparing(ItemCard::title, String.CASE_INSENSITIVE_ORDER))
+                    .toList();
+        }
+        if (sort == SortType.PRICE) {
+            return cards.stream()
+                    .sorted(Comparator.comparingLong(ItemCard::price))
+                    .toList();
+        }
+        return cards;
+    }
+
+    private ItemCard toItemCard(Item item, int count) {
         return new ItemCard(
                 item.getId(),
                 item.getTitle(),
                 item.getDescription(),
                 item.getImgPath(),
                 item.getPrice(),
-                0
+                count
         );
     }
 
@@ -69,7 +118,7 @@ public class CatalogService {
         return new ItemCard(-1L, "", "", "", 0L, 0);
     }
 
-    public record CatalogPageData(
+    public record CatalogPageResult(
             List<List<ItemCard>> items,
             String search,
             SortType sort,
