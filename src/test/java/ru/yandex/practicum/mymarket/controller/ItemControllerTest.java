@@ -2,29 +2,30 @@ package ru.yandex.practicum.mymarket.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.reactive.function.BodyInserters;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.CartAction;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.service.CartService;
 import ru.yandex.practicum.mymarket.service.ItemService;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
-@WebMvcTest(ItemController.class)
+@WebFluxTest(controllers = ItemController.class)
+@ActiveProfiles("test")
 class ItemControllerTest {
 
     @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @MockBean
     private CartService cartService;
@@ -33,42 +34,53 @@ class ItemControllerTest {
     private ItemService itemService;
 
     @Test
-    void getItemReturnsItemViewAndModel() throws Exception {
+    void getItemReturnsItemViewAndModel() {
         ItemCard card = new ItemCard(1L, "Title", "Desc", "/i.png", 200L, 3);
-        when(itemService.getItem(1L)).thenReturn(card);
+        when(itemService.getItem(1L)).thenReturn(Mono.just(card));
 
-        mockMvc.perform(get("/items/{id}", 1L))
-                .andExpect(status().isOk())
-                .andExpect(view().name("item"))
-                .andExpect(model().attributeExists("item"))
-                .andExpect(model().attribute("item", card));
+        webTestClient.get().uri("/items/{id}", 1L)
+                .accept(MediaType.TEXT_HTML)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_HTML)
+                .expectBody(String.class)
+                .value(body -> assertThat(body).contains("Title").contains("Desc"));
     }
 
     @Test
-    void postItemsRedirectsToItemsWithQueryParams() throws Exception {
-        mockMvc.perform(post("/items")
-                        .param("id", "5")
-                        .param("action", "PLUS")
-                        .param("search", "foo")
-                        .param("sort", "NO")
-                        .param("pageNumber", "2")
-                        .param("pageSize", "10"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/items?search=foo&sort=NO&pageNumber=2&pageSize=10"));
+    void postItemsRedirectsToItemsWithQueryParams() {
+        when(cartService.changeItemCount(eq(5L), eq(CartAction.PLUS))).thenReturn(Mono.empty());
+
+        webTestClient.post().uri("/items")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(BodyInserters.fromFormData("id", "5")
+                        .with("action", "PLUS")
+                        .with("search", "foo")
+                        .with("sort", "NO")
+                        .with("pageNumber", "2")
+                        .with("pageSize", "10"))
+                .exchange()
+                .expectStatus().isSeeOther()
+                .expectHeader().value(HttpHeaders.LOCATION, location ->
+                        assertThat(location).endsWith("/items?search=foo&sort=NO&pageNumber=2&pageSize=10"));
 
         verify(cartService).changeItemCount(eq(5L), eq(CartAction.PLUS));
     }
 
     @Test
-    void postItemByIdReturnsItemView() throws Exception {
+    void postItemByIdReturnsItemView() {
         ItemCard after = new ItemCard(2L, "X", "", "", 1L, 1);
-        when(itemService.getItem(2L)).thenReturn(after);
+        when(itemService.getItem(2L)).thenReturn(Mono.just(after));
+        when(cartService.changeItemCount(eq(2L), eq(CartAction.MINUS))).thenReturn(Mono.empty());
 
-        mockMvc.perform(post("/items/{id}", 2L).param("action", "MINUS"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("item"))
-                .andExpect(model().attributeExists("item"))
-                .andExpect(model().attribute("item", after));
+        webTestClient.post().uri("/items/{id}", 2L)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(BodyInserters.fromFormData("action", "MINUS"))
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_HTML)
+                .expectBody(String.class)
+                .value(body -> assertThat(body).contains("X"));
 
         verify(cartService).changeItemCount(eq(2L), eq(CartAction.MINUS));
     }

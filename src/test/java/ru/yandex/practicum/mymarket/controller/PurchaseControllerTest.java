@@ -2,31 +2,35 @@ package ru.yandex.practicum.mymarket.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.HttpHeaders;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.service.OrderService;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(PurchaseController.class)
+@WebFluxTest(controllers = PurchaseController.class)
+@ActiveProfiles("test")
 class PurchaseControllerTest {
 
     @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @MockBean
     private OrderService orderService;
 
     @Test
-    void postBuyRedirectsToNewOrderPage() throws Exception {
-        when(orderService.createOrderFromCart()).thenReturn(42L);
+    void postBuyRedirectsToNewOrderPage() {
+        when(orderService.createOrderFromCart()).thenReturn(Mono.just(42L));
 
-        mockMvc.perform(post("/buy"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/orders/42?newOrder=true"));
+        webTestClient.post().uri("/buy")
+                .exchange()
+                .expectStatus().isSeeOther()
+                .expectHeader().value(HttpHeaders.LOCATION, location ->
+                        assertThat(location).endsWith("/orders/42?newOrder=true"));
     }
 }

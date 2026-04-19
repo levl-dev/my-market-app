@@ -1,55 +1,49 @@
 package ru.yandex.practicum.mymarket.repository;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
+import org.springframework.boot.test.autoconfigure.data.r2dbc.DataR2dbcTest;
 import org.springframework.test.context.ActiveProfiles;
 import ru.yandex.practicum.mymarket.model.Item;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DataJpaTest
+@DataR2dbcTest
 @ActiveProfiles("test")
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class ItemRepositoryTest {
 
     @Autowired
     private ItemRepository itemRepository;
 
     @Test
-    void findByTitleOrDescriptionIsCaseInsensitiveAndRespectsPageableSort() {
-        itemRepository.save(item("TestItem1", "TestDescription1", 300L));
-        itemRepository.save(item("TestItem2", "BLUE", 100L));
-        itemRepository.save(item("TestItem3", "TestDescription3", 50L));
+    void findByTitleOrDescriptionIsCaseInsensitive() {
+        itemRepository.save(item("TestItem1", "TestDescription1", 300L)).block();
+        itemRepository.save(item("TestItem2", "BLUE", 100L)).block();
+        itemRepository.save(item("TestItem3", "TestDescription3", 50L)).block();
 
-        Page<Item> page = itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
-                "blUe",
-                "blUe",
-                PageRequest.of(0, 10, Sort.by("price").ascending())
-        );
+        List<Item> found = itemRepository
+                .findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("blUe", "blUe")
+                .collectList()
+                .block();
 
-        assertThat(page.getContent()).hasSize(1);
-        assertThat(page.getContent().get(0).getTitle()).isEqualTo("TestItem2");
+        assertThat(found).hasSize(1);
+        assertThat(found.get(0).getTitle()).isEqualTo("TestItem2");
     }
 
     @Test
     void findByTitleOrDescriptionFindsBothFields() {
-        itemRepository.save(item("TestItem1 key", "x", 100L));
-        itemRepository.save(item("TestItem2", "key", 200L));
-        itemRepository.save(item("TestItem3", "TestDescription3", 50L));
+        itemRepository.save(item("TestItem1 key", "x", 100L)).block();
+        itemRepository.save(item("TestItem2", "key", 200L)).block();
+        itemRepository.save(item("TestItem3", "TestDescription3", 50L)).block();
 
-        Page<Item> page = itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
-                "key",
-                "key",
-                PageRequest.of(0, 10, Sort.by("price").descending())
-        );
+        List<Item> found = itemRepository
+                .findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("key", "key")
+                .collectList()
+                .block();
 
-        assertThat(page.getContent()).hasSize(2);
-        assertThat(page.getContent()).extracting(Item::getTitle).containsExactly("TestItem2", "TestItem1 key");
+        assertThat(found).extracting(Item::getTitle).containsExactlyInAnyOrder("TestItem2", "TestItem1 key");
     }
 
     private static Item item(String title, String description, long price) {
