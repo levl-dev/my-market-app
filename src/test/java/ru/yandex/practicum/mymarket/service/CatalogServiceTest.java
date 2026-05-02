@@ -2,13 +2,11 @@ package ru.yandex.practicum.mymarket.service;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.dto.SortType;
 import ru.yandex.practicum.mymarket.model.Item;
@@ -39,68 +37,68 @@ class CatalogServiceTest {
 
     @Test
     void blankSearchUsesFindAll() {
-        Page<Item> page = emptyPage();
-        when(itemRepository.findAll(any(Pageable.class))).thenReturn(page);
-        when(cartService.getItemCounts(any())).thenReturn(Map.of());
+        when(itemRepository.findAll()).thenReturn(Flux.empty());
+        when(cartService.getItemCounts(any())).thenReturn(emptyCounts());
 
-        catalogService.getItems("", SortType.NO, 1, 5);
+        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 5).block();
 
-        verify(itemRepository).findAll(any(Pageable.class));
+        assertThat(result).isNotNull();
+        assertThat(result.items()).isNotEmpty();
+        verify(itemRepository).findAll();
         verify(itemRepository, never()).findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
-                any(), any(), any());
+                any(), any());
     }
 
     @Test
     void nonBlankSearchUsesSearchMethod() {
-        Page<Item> page = emptyPage();
-        when(itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
-                eq("q"), eq("q"), any(Pageable.class))).thenReturn(page);
-        when(cartService.getItemCounts(any())).thenReturn(Map.of());
+        when(itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(eq("q"), eq("q")))
+                .thenReturn(Flux.empty());
+        when(cartService.getItemCounts(any())).thenReturn(emptyCounts());
 
-        catalogService.getItems("q", SortType.NO, 1, 5);
+        CatalogService.CatalogPageResult result = catalogService.getItems("q", SortType.NO, 1, 5).block();
 
-        verify(itemRepository).findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
-                eq("q"), eq("q"), any(Pageable.class));
-        verify(itemRepository, never()).findAll(any(Pageable.class));
+        assertThat(result).isNotNull();
+        verify(itemRepository).findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(eq("q"), eq("q"));
+        verify(itemRepository, never()).findAll();
     }
 
     @Test
-    void sortNoUsesUnsortedPageable() {
-        Page<Item> page = emptyPage();
-        when(itemRepository.findAll(any(Pageable.class))).thenReturn(page);
-        when(cartService.getItemCounts(any())).thenReturn(Map.of());
+    void sortNoKeepsRepositoryOrder() {
+        Item first = item(1L, "b", 30L);
+        Item second = item(2L, "a", 10L);
+        when(itemRepository.findAll()).thenReturn(Flux.just(first, second));
+        when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0)));
 
-        catalogService.getItems("", SortType.NO, 1, 5);
+        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 10).block();
+        List<ItemCard> flat = flatten(result);
 
-        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(itemRepository).findAll(captor.capture());
-        assertThat(captor.getValue().getSort().isSorted()).isFalse();
+        assertThat(flat).extracting(ItemCard::id).containsExactly(1L, 2L);
     }
 
     @Test
-    void sortAlphaUsesTitleAscending() {
-        Page<Item> page = emptyPage();
-        when(itemRepository.findAll(any(Pageable.class))).thenReturn(page);
-        when(cartService.getItemCounts(any())).thenReturn(Map.of());
+    void sortAlphaSortsByTitleCaseInsensitive() {
+        Item first = item(1L, "b", 30L);
+        Item second = item(2L, "a", 10L);
+        when(itemRepository.findAll()).thenReturn(Flux.just(first, second));
+        when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0)));
 
-        catalogService.getItems("", SortType.ALPHA, 1, 5);
+        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.ALPHA, 1, 10).block();
+        List<ItemCard> flat = flatten(result);
 
-        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(itemRepository).findAll(captor.capture());
-        assertThat(captor.getValue().getSort().getOrderFor("title").getDirection()).isEqualTo(Sort.Direction.ASC);
+        assertThat(flat).extracting(ItemCard::title).containsExactly("a", "b");
     }
 
     @Test
-    void sortPriceUsesPriceAscending() {
-        Page<Item> page = emptyPage();
-        when(itemRepository.findAll(any(Pageable.class))).thenReturn(page);
-        when(cartService.getItemCounts(any())).thenReturn(Map.of());
+    void sortPriceSortsByPriceAscending() {
+        Item first = item(1L, "a", 30L);
+        Item second = item(2L, "b", 10L);
+        when(itemRepository.findAll()).thenReturn(Flux.just(first, second));
+        when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0)));
 
-        catalogService.getItems("", SortType.PRICE, 1, 5);
+        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.PRICE, 1, 10).block();
+        List<ItemCard> flat = flatten(result);
 
-        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(itemRepository).findAll(captor.capture());
-        assertThat(captor.getValue().getSort().getOrderFor("price").getDirection()).isEqualTo(Sort.Direction.ASC);
+        assertThat(flat).extracting(ItemCard::price).containsExactly(10L, 30L);
     }
 
     @Test
@@ -115,11 +113,10 @@ class CatalogServiceTest {
             item.setPrice(10L * i);
             content.add(item);
         }
-        Page<Item> page = pageWithContent(content);
-        when(itemRepository.findAll(any(Pageable.class))).thenReturn(page);
-        when(cartService.getItemCounts(any())).thenReturn(Map.of());
+        when(itemRepository.findAll()).thenReturn(Flux.fromIterable(content));
+        when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0, 3L, 0, 4L, 0)));
 
-        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 10);
+        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 10).block();
 
         assertThat(result.items()).hasSize(2);
         assertThat(result.items().get(0)).hasSize(3);
@@ -132,26 +129,31 @@ class CatalogServiceTest {
 
     @Test
     void emptyCatalogPageYieldsSingleRowOfPlaceholderCards() {
-        Page<Item> page = pageWithContent(List.of());
-        when(itemRepository.findAll(any(Pageable.class))).thenReturn(page);
-        when(cartService.getItemCounts(any())).thenReturn(Map.of());
+        when(itemRepository.findAll()).thenReturn(Flux.empty());
+        when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of()));
 
-        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 5);
+        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 5).block();
 
         assertThat(result.items()).hasSize(1);
         assertThat(result.items().get(0)).hasSize(3);
         assertThat(result.items().get(0)).allMatch(c -> c.id() == -1L);
     }
 
-    private static Page<Item> emptyPage() {
-        return pageWithContent(List.of());
+    private static Mono<Map<Long, Integer>> emptyCounts() {
+        return Mono.just(Map.of());
     }
 
-    private static Page<Item> pageWithContent(List<Item> content) {
-        Page<Item> page = org.mockito.Mockito.mock(Page.class);
-        when(page.getContent()).thenReturn(content);
-        when(page.hasPrevious()).thenReturn(false);
-        when(page.hasNext()).thenReturn(false);
-        return page;
+    private static Item item(long id, String title, long price) {
+        Item item = new Item();
+        item.setId(id);
+        item.setTitle(title);
+        item.setDescription("");
+        item.setImgPath("");
+        item.setPrice(price);
+        return item;
+    }
+
+    private static List<ItemCard> flatten(CatalogService.CatalogPageResult result) {
+        return result.items().stream().flatMap(List::stream).filter(c -> c.id() != -1L).toList();
     }
 }

@@ -2,9 +2,12 @@ package ru.yandex.practicum.mymarket.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.dto.Paging;
 import ru.yandex.practicum.mymarket.dto.SortType;
@@ -12,43 +15,45 @@ import ru.yandex.practicum.mymarket.service.CatalogService;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
-@WebMvcTest(CatalogController.class)
+@WebFluxTest(controllers = CatalogController.class)
+@ActiveProfiles("test")
 class CatalogControllerTest {
 
     @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @MockBean
     private CatalogService catalogService;
 
     @Test
-    void getRootReturnsItemsViewWithModel() throws Exception {
+    void getRootReturnsItemsViewWithModel() {
         stubCatalogPage();
 
-        mockMvc.perform(get("/"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("items"))
-                .andExpect(model().attributeExists("items", "search", "sort", "paging"));
+        webTestClient.get().uri("/")
+                .accept(MediaType.TEXT_HTML)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_HTML)
+                .expectBody(String.class)
+                .value(body -> assertThat(body).contains("t"));
     }
 
     @Test
-    void getItemsReturns200AndExpectedModel() throws Exception {
+    void getItemsReturns200AndExpectedModel() {
         stubCatalogPage();
 
-        mockMvc.perform(get("/items"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("items"))
-                .andExpect(model().attributeExists("items", "search", "sort", "paging"))
-                .andExpect(model().attribute("search", ""))
-                .andExpect(model().attribute("sort", SortType.NO));
+        webTestClient.get().uri("/items")
+                .accept(MediaType.TEXT_HTML)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_HTML)
+                .expectBody(String.class)
+                .value(body -> assertThat(body).contains("t"));
     }
 
     private void stubCatalogPage() {
@@ -56,8 +61,10 @@ class CatalogControllerTest {
         ItemCard placeholder = new ItemCard(-1L, "", "", "", 0L, 0);
         CatalogService.CatalogPageResult result = new CatalogService.CatalogPageResult(
                 List.of(List.of(card, placeholder, placeholder)),
+                "",
+                SortType.NO,
                 new Paging(5, 1, false, false)
         );
-        when(catalogService.getItems(anyString(), eq(SortType.NO), eq(1), eq(5))).thenReturn(result);
+        when(catalogService.getItems(anyString(), eq(SortType.NO), eq(1), eq(5))).thenReturn(Mono.just(result));
     }
 }

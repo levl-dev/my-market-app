@@ -2,10 +2,11 @@ package ru.yandex.practicum.mymarket.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.reactive.result.view.Rendering;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.service.OrderService;
 
 @Controller
@@ -15,19 +16,22 @@ public class OrderController {
     private final OrderService orderService;
 
     @GetMapping("/orders")
-    public String getOrders(Model model) {
-        model.addAttribute("orders", orderService.getOrders());
-        return "orders";
+    public Mono<Rendering> getOrders() {
+        return orderService.getOrders()
+                .map(orders -> Rendering.view("orders")
+                        .modelAttribute("orders", orders)
+                        .build());
     }
 
     @GetMapping("/orders/{id}")
-    public String getOrder(
+    public Mono<Rendering> getOrder(
             @PathVariable long id,
-            @RequestParam(defaultValue = "false") boolean newOrder,
-            Model model
+            @RequestParam(defaultValue = "false") boolean newOrder
     ) {
-        model.addAttribute("order", orderService.getOrder(id));
-        model.addAttribute("newOrder", newOrder);
-        return "order";
+        return orderService.getOrder(id)
+                .map(order -> Rendering.view("order")
+                        .modelAttribute("order", order)
+                        .modelAttribute("newOrder", newOrder)
+                        .build());
     }
 }

@@ -1,11 +1,9 @@
 package ru.yandex.practicum.mymarket.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.dto.Paging;
 import ru.yandex.practicum.mymarket.dto.SortType;
@@ -13,6 +11,7 @@ import ru.yandex.practicum.mymarket.model.Item;
 import ru.yandex.practicum.mymarket.repository.ItemRepository;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -24,59 +23,84 @@ public class CatalogService {
     private final CartService cartService;
     private static final int ITEMS_PER_ROW = 3;
 
-    public CatalogPageResult getItems(String search, SortType sort, int pageNumber, int pageSize) {
-        pageNumber = Math.max(pageNumber, 1);
-        pageSize = Math.max(pageSize, 1);
+    public Mono<CatalogPageResult> getItems(String search, SortType sort, int pageNumber, int pageSize) {
+        String safeSearch = search == null ? "" : search.trim();
+        SortType safeSort = sort == null ? SortType.NO : sort;
+        int safePageSize = pageSize > 0 ? pageSize : 10;
 
-        Pageable pageable = PageRequest.of(pageNumber - 1, pageSize, toSort(sort));
+        return findItems(safeSearch)
+                .collectList()
+                .flatMap(items -> {
+                    List<Long> itemIds = items.stream().map(Item::getId).toList();
+                    return cartService.getItemCounts(itemIds)
+                            .map(counts -> toPageData(items, counts, safeSearch, safeSort, pageNumber, safePageSize));
+                });
+    }
 
-        Page<Item> page;
-        if (search == null || search.isBlank()) {
-            page = itemRepository.findAll(pageable);
-        } else {
-            page = itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(search, search, pageable);
+    private Flux<Item> findItems(String search) {
+        if (search.isBlank()) {
+            return itemRepository.findAll();
         }
+        return itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(search, search);
+    }
 
-        List<Item> pageItems = page.getContent();
-        List<Long> itemIds = pageItems.stream().map(Item::getId).toList();
-        var counts = cartService.getItemCounts(itemIds);
+    private CatalogPageResult toPageData(
+            List<Item> items,
+            Map<Long, Integer> counts,
+            String search,
+            SortType sort,
+            int pageNumber,
+            int pageSize
+    ) {
+        List<ItemCard> cards = items.stream()
+                .map(item -> toItemCard(item, counts.getOrDefault(item.getId(), 0)))
+                .toList();
 
-        List<ItemCard> cards = pageItems.stream().map(item -> toItemCard(item, counts)).toList();
+        List<ItemCard> sortedCards = sortCards(cards, sort);
+        int pagesCount = Math.max((int) Math.ceil((double) sortedCards.size() / pageSize), 1);
+        int safePageNumber = Math.min(Math.max(pageNumber, 1), pagesCount);
+        int from = (safePageNumber - 1) * pageSize;
+        int to = Math.min(from + pageSize, sortedCards.size());
+        List<ItemCard> pageItems = from < to ? sortedCards.subList(from, to) : List.of();
 
         return new CatalogPageResult(
-                splitIntoRows(cards),
-                new Paging(pageSize, pageNumber, page.hasPrevious(), page.hasNext())
+                splitIntoRows(pageItems),
+                search,
+                sort,
+                new Paging(pageSize, safePageNumber, safePageNumber > 1, safePageNumber < pagesCount)
         );
     }
 
-    private ItemCard toItemCard(Item item, Map<Long, Integer> counts) {
+    private List<ItemCard> sortCards(List<ItemCard> cards, SortType sort) {
+        if (sort == SortType.ALPHA) {
+            return cards.stream()
+                    .sorted(Comparator.comparing(ItemCard::title, String.CASE_INSENSITIVE_ORDER))
+                    .toList();
+        }
+        if (sort == SortType.PRICE) {
+            return cards.stream()
+                    .sorted(Comparator.comparingLong(ItemCard::price))
+                    .toList();
+        }
+        return cards;
+    }
+
+    private ItemCard toItemCard(Item item, int count) {
         return new ItemCard(
                 item.getId(),
                 item.getTitle(),
                 item.getDescription(),
                 item.getImgPath(),
                 item.getPrice(),
-                counts.getOrDefault(item.getId(), 0)
+                count
         );
-    }
-
-    private Sort toSort(SortType sort) {
-        if (sort == null || sort == SortType.NO) {
-            return Sort.unsorted();
-        }
-
-        return switch (sort) {
-            case ALPHA -> Sort.by("title").ascending();
-            case PRICE -> Sort.by("price").ascending();
-            case NO -> Sort.unsorted();
-        };
     }
 
     private List<List<ItemCard>> splitIntoRows(List<ItemCard> items) {
         List<List<ItemCard>> rows = new ArrayList<>();
 
         for (int i = 0; i < items.size(); i += ITEMS_PER_ROW) {
-            List<ItemCard> row = new ArrayList<>(items.subList(i, Math.min(i + 3, items.size())));
+            List<ItemCard> row = new ArrayList<>(items.subList(i, Math.min(i + ITEMS_PER_ROW, items.size())));
             while (row.size() < ITEMS_PER_ROW) {
                 row.add(emptyCard());
             }
@@ -94,6 +118,11 @@ public class CatalogService {
         return new ItemCard(-1L, "", "", "", 0L, 0);
     }
 
-    public record CatalogPageResult(List<List<ItemCard>> items, Paging paging) {
+    public record CatalogPageResult(
+            List<List<ItemCard>> items,
+            String search,
+            SortType sort,
+            Paging paging
+    ) {
     }
 }

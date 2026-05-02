@@ -1,15 +1,14 @@
 # My Market App
 
-Web application "Online Store Showcase" built with Spring Boot.
+Reactive web application "Online Store Showcase" built with Spring Boot.
 
 ## Tech Stack
 
 - Java 21
 - Spring Boot
-- Spring Web MVC
+- Spring WebFlux
 - Thymeleaf
-- Spring Data JPA
-- Hibernate
+- Spring Data R2DBC
 - PostgreSQL
 - H2
 - Maven

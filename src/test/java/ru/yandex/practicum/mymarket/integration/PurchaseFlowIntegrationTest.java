@@ -1,21 +1,26 @@
 package ru.yandex.practicum.mymarket.integration;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.model.CartItem;
 import ru.yandex.practicum.mymarket.model.Item;
 import ru.yandex.practicum.mymarket.model.Order;
+import ru.yandex.practicum.mymarket.model.OrderItem;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.ItemRepository;
+import ru.yandex.practicum.mymarket.repository.OrderItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderRepository;
 import ru.yandex.practicum.mymarket.service.OrderService;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("test")
 class PurchaseFlowIntegrationTest {
 
@@ -29,29 +34,52 @@ class PurchaseFlowIntegrationTest {
     private OrderRepository orderRepository;
 
     @Autowired
+    private OrderItemRepository orderItemRepository;
+
+    @Autowired
     private OrderService orderService;
 
+    @BeforeEach
+    void cleanDb() {
+        orderItemRepository.deleteAll()
+                .then(orderRepository.deleteAll())
+                .then(cartItemRepository.deleteAll())
+                .then(itemRepository.deleteAll())
+                .block();
+    }
+
     @Test
-    @Transactional
     void createOrderFromCartCreatesOrderWithSnapshotAndClearsCart() {
-        Item ball = itemRepository.save(item("Ball", 2500L));
-        Item mug = itemRepository.save(item("Mug", 700L));
+        Item ball = itemRepository.save(item("Ball", 2500L)).block();
+        Item mug = itemRepository.save(item("Mug", 700L)).block();
 
-        cartItemRepository.save(cartItem(ball, 2));
-        cartItemRepository.save(cartItem(mug, 1));
+        cartItemRepository.save(cartItem(ball.getId(), 2)).block();
+        cartItemRepository.save(cartItem(mug.getId(), 1)).block();
 
-        long orderId = orderService.createOrderFromCart();
+        long id = orderService.createOrderFromCart().block();
 
-        Order order = orderRepository.findById(orderId).orElseThrow();
-        assertThat(order.getTotalSum()).isEqualTo(5700L);
-        assertThat(order.getItems()).hasSize(2);
-        assertThat(order.getItems())
+        OrderSnapshot snap = snapshot(id, ball.getId(), mug.getId()).block();
+
+        assertThat(snap.order().getTotalSum()).isEqualTo(5700L);
+        assertThat(snap.orderItems()).hasSize(2);
+        assertThat(snap.orderItems())
                 .extracting(oi -> oi.getItemId() + ":" + oi.getTitle() + ":" + oi.getPrice() + ":" + oi.getCount())
                 .containsExactlyInAnyOrder(
-                        ball.getId() + ":Ball:2500:2",
-                        mug.getId() + ":Mug:700:1"
+                        snap.ballId() + ":Ball:2500:2",
+                        snap.mugId() + ":Mug:700:1"
                 );
-        assertThat(cartItemRepository.findAll()).isEmpty();
+        assertThat(snap.cartRows()).isZero();
+    }
+
+    private Mono<OrderSnapshot> snapshot(long orderId, long ballId, long mugId) {
+        return Mono.zip(
+                orderRepository.findById(orderId).single(),
+                orderItemRepository.findByOrderId(orderId).collectList(),
+                cartItemRepository.findAll().count()
+        ).map(t -> new OrderSnapshot(t.getT1(), t.getT2(), t.getT3(), ballId, mugId));
+    }
+
+    private record OrderSnapshot(Order order, List<OrderItem> orderItems, long cartRows, long ballId, long mugId) {
     }
 
     private static Item item(String title, long price) {
@@ -63,11 +91,10 @@ class PurchaseFlowIntegrationTest {
         return item;
     }
 
-    private static CartItem cartItem(Item item, int count) {
+    private static CartItem cartItem(long itemId, int count) {
         CartItem cartItem = new CartItem();
-        cartItem.setItem(item);
+        cartItem.setItemId(itemId);
         cartItem.setCount(count);
         return cartItem;
     }
-
 }

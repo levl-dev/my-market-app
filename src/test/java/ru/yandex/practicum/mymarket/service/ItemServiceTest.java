@@ -5,11 +5,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.model.Item;
 import ru.yandex.practicum.mymarket.repository.ItemRepository;
-
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -34,10 +33,10 @@ class ItemServiceTest {
         item.setDescription("Desc");
         item.setImgPath("/img.png");
         item.setPrice(300L);
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
-        when(cartService.getItemCount(1L)).thenReturn(5);
+        when(itemRepository.findById(1L)).thenReturn(Mono.just(item));
+        when(cartService.getItemCount(1L)).thenReturn(Mono.just(5));
 
-        ItemCard card = itemService.getItem(1L);
+        ItemCard card = itemService.getItem(1L).block();
 
         assertThat(card.id()).isEqualTo(1L);
         assertThat(card.title()).isEqualTo("Title");
@@ -52,10 +51,10 @@ class ItemServiceTest {
         item.setDescription("");
         item.setImgPath("");
         item.setPrice(1L);
-        when(itemRepository.findById(2L)).thenReturn(Optional.of(item));
-        when(cartService.getItemCount(2L)).thenReturn(0);
+        when(itemRepository.findById(2L)).thenReturn(Mono.just(item));
+        when(cartService.getItemCount(2L)).thenReturn(Mono.just(0));
 
-        ItemCard card = itemService.getItem(2L);
+        ItemCard card = itemService.getItem(2L).block();
 
         assertThat(card.count()).isZero();
     }
