@@ -7,6 +7,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.reactive.result.view.Rendering;
 import reactor.core.publisher.Mono;
+
+import java.util.List;
+
+import ru.yandex.practicum.mymarket.client.PaymentClient;
 import ru.yandex.practicum.mymarket.dto.CartAction;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.service.CartService;
@@ -15,7 +19,11 @@ import ru.yandex.practicum.mymarket.service.CartService;
 @RequiredArgsConstructor
 public class CartController {
 
+    private static final String MSG_INSUFFICIENT = "Недостаточно средств";
+    private static final String MSG_UNAVAILABLE = "Сервис платежей недоступен";
+
     private final CartService cartService;
+    private final PaymentClient paymentClient;
 
     @GetMapping("/cart/items")
     public Mono<Rendering> getCart() {
@@ -29,17 +37,30 @@ public class CartController {
 
     private Mono<Rendering> renderCart() {
         return cartService.getCartItems()
-                .map(items -> {
-                    long total = 0L;
-
-                    for (ItemCard item : items) {
-                        total += item.price() * item.count();
-                    }
-
-                    return Rendering.view("cart")
-                            .modelAttribute("items", items)
-                            .modelAttribute("total", total)
-                            .build();
+                .flatMap(items -> {
+                    long total = cartTotal(items);
+                    return paymentClient.getBalance()
+                            .map(balance -> balance >= total
+                                    ? new CartPaymentState(true, "")
+                                    : new CartPaymentState(false, MSG_INSUFFICIENT))
+                            .onErrorResume(e -> Mono.just(new CartPaymentState(false, MSG_UNAVAILABLE)))
+                            .map(state -> Rendering.view("cart")
+                                    .modelAttribute("items", items)
+                                    .modelAttribute("total", total)
+                                    .modelAttribute("canBuy", state.canBuy())
+                                    .modelAttribute("paymentMessage", state.paymentMessage())
+                                    .build());
                 });
+    }
+
+    private static long cartTotal(List<ItemCard> items) {
+        long total = 0L;
+        for (ItemCard item : items) {
+            total += item.price() * item.count();
+        }
+        return total;
+    }
+
+    private record CartPaymentState(boolean canBuy, String paymentMessage) {
     }
 }

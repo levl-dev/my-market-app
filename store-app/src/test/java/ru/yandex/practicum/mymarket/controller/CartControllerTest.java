@@ -8,6 +8,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.client.PaymentClient;
 import ru.yandex.practicum.mymarket.dto.CartAction;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.service.CartService;
@@ -29,10 +30,14 @@ class CartControllerTest {
     @MockBean
     private CartService cartService;
 
+    @MockBean
+    private PaymentClient paymentClient;
+
     @Test
     void getCartReturnsCartViewWithModel() {
         List<ItemCard> lines = List.of(new ItemCard(1L, "a", "", "/x", 10L, 2));
         when(cartService.getCartItems()).thenReturn(Mono.just(lines));
+        when(paymentClient.getBalance()).thenReturn(Mono.just(1_000_000L));
 
         webTestClient.get().uri("/cart/items")
                 .accept(MediaType.TEXT_HTML)
@@ -48,6 +53,7 @@ class CartControllerTest {
         List<ItemCard> lines = List.of();
         when(cartService.changeItemCount(eq(3L), eq(CartAction.DELETE))).thenReturn(Mono.empty());
         when(cartService.getCartItems()).thenReturn(Mono.just(lines));
+        when(paymentClient.getBalance()).thenReturn(Mono.just(0L));
 
         webTestClient.post().uri("/cart/items?id=3&action=DELETE")
                 .exchange()
