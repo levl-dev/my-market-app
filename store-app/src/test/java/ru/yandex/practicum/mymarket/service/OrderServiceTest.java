@@ -8,6 +8,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.client.PaymentClient;
+import ru.yandex.practicum.mymarket.client.dto.PaymentResponse;
 import ru.yandex.practicum.mymarket.model.CartItem;
 import ru.yandex.practicum.mymarket.model.Item;
 import ru.yandex.practicum.mymarket.model.Order;
@@ -22,6 +24,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyIterable;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,6 +42,9 @@ class OrderServiceTest {
 
     @Mock
     private OrderItemRepository orderItemRepository;
+
+    @Mock
+    private PaymentClient paymentClient;
 
     @InjectMocks
     private OrderService orderService;
@@ -61,6 +67,8 @@ class OrderServiceTest {
         line2.setItemId(20L);
         line2.setCount(1);
 
+        long totalPrice = 200L * 2 + 50L * 1;
+
         when(cartService.getCartItemsForOrder()).thenReturn(Mono.just(List.of(line1, line2)));
         when(itemRepository.findAllById(List.of(10L, 20L))).thenReturn(Flux.just(item1, item2));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
@@ -70,6 +78,8 @@ class OrderServiceTest {
         });
         when(orderItemRepository.saveAll(anyIterable())).thenReturn(Flux.empty());
         when(cartService.clearCart()).thenReturn(Mono.empty());
+        when(paymentClient.pay(eq(totalPrice)))
+                .thenReturn(Mono.just(new PaymentResponse(true, 9_000L, "Payment completed")));
 
         long id = orderService.createOrderFromCart().block();
         assertThat(id).isEqualTo(99L);
@@ -77,7 +87,7 @@ class OrderServiceTest {
         ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
         verify(orderRepository).save(orderCaptor.capture());
         Order saved = orderCaptor.getValue();
-        assertThat(saved.getTotalSum()).isEqualTo(200L * 2 + 50L * 1);
+        assertThat(saved.getTotalSum()).isEqualTo(totalPrice);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Iterable<OrderItem>> itemsCaptor = ArgumentCaptor.forClass(Iterable.class);
@@ -99,5 +109,6 @@ class OrderServiceTest {
         assertThat(second.getCount()).isEqualTo(1);
 
         verify(cartService).clearCart();
+        verify(paymentClient).pay(eq(totalPrice));
     }
 }

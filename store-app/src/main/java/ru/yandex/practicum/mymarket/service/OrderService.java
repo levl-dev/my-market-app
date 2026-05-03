@@ -5,6 +5,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.client.PaymentClient;
+import ru.yandex.practicum.mymarket.client.dto.PaymentResponse;
 import ru.yandex.practicum.mymarket.dto.OrderItemView;
 import ru.yandex.practicum.mymarket.dto.OrderView;
 import ru.yandex.practicum.mymarket.model.CartItem;
@@ -29,11 +31,26 @@ public class OrderService {
     private final ItemRepository itemRepository;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final PaymentClient paymentClient;
 
     public Mono<Long> createOrderFromCart() {
         return cartService.getCartItemsForOrder()
                 .flatMap(cartItems -> loadItemsById(cartItems)
-                        .flatMap(itemsById -> saveOrder(cartItems, itemsById)));
+                        .flatMap(itemsById -> {
+                            long totalAmount = calculateTotal(cartItems, itemsById);
+                            return paymentClient.pay(totalAmount)
+                                    .flatMap(this::requirePaymentSuccess)
+                                    .then(saveOrder(cartItems, itemsById));
+                        }));
+    }
+
+    private Mono<PaymentResponse> requirePaymentSuccess(PaymentResponse response) {
+        if (response.success()) {
+            return Mono.just(response);
+        }
+        return Mono.error(new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                response.message()));
     }
 
     private Mono<Map<Long, Item>> loadItemsById(List<CartItem> cartItems) {
