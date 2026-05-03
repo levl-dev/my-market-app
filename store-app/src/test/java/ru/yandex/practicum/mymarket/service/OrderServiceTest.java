@@ -14,12 +14,13 @@ import ru.yandex.practicum.mymarket.model.CartItem;
 import ru.yandex.practicum.mymarket.model.Item;
 import ru.yandex.practicum.mymarket.model.Order;
 import ru.yandex.practicum.mymarket.model.OrderItem;
-import ru.yandex.practicum.mymarket.repository.ItemRepository;
+import ru.yandex.practicum.mymarket.cache.ItemCacheService;
 import ru.yandex.practicum.mymarket.repository.OrderItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderRepository;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -35,7 +36,7 @@ class OrderServiceTest {
     private CartService cartService;
 
     @Mock
-    private ItemRepository itemRepository;
+    private ItemCacheService itemCacheService;
 
     @Mock
     private OrderRepository orderRepository;
@@ -70,7 +71,7 @@ class OrderServiceTest {
         long totalPrice = 200L * 2 + 50L * 1;
 
         when(cartService.getCartItemsForOrder()).thenReturn(Mono.just(List.of(line1, line2)));
-        when(itemRepository.findAllById(List.of(10L, 20L))).thenReturn(Flux.just(item1, item2));
+        when(itemCacheService.findByIds(List.of(10L, 20L))).thenReturn(Mono.just(Map.of(10L, item1, 20L, item2)));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
             Order o = invocation.getArgument(0);
             o.setId(99L);

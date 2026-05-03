@@ -7,10 +7,10 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.CartAction;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
+import ru.yandex.practicum.mymarket.cache.ItemCacheService;
 import ru.yandex.practicum.mymarket.model.CartItem;
 import ru.yandex.practicum.mymarket.model.Item;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
-import ru.yandex.practicum.mymarket.repository.ItemRepository;
 
 import java.util.*;
 
@@ -19,7 +19,7 @@ import java.util.*;
 public class CartService {
 
     private final CartItemRepository cartItemRepository;
-    private final ItemRepository itemRepository;
+    private final ItemCacheService itemCacheService;
 
     public Mono<Void> changeItemCount(long itemId, CartAction action) {
         Mono<CartItem> cartItemMono = cartItemRepository.findByItemId(itemId);
@@ -34,7 +34,7 @@ public class CartService {
                         return cartItemRepository.save(existing);
                     })
                     .switchIfEmpty(
-                            itemRepository.findById(itemId)
+                            itemCacheService.findById(itemId)
                                     .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found")))
                                     .flatMap(item -> {
                                         CartItem created = new CartItem();
@@ -90,15 +90,8 @@ public class CartService {
                             .map(CartItem::getItemId)
                             .toList();
 
-                    return itemRepository.findAllById(itemIds)
-                            .collectList()
-                            .map(items -> {
-                                Map<Long, Item> itemsById = new HashMap<>();
-
-                                for (Item item : items) {
-                                    itemsById.put(item.getId(), item);
-                                }
-
+                    return itemCacheService.findByIds(itemIds)
+                            .map(itemsById -> {
                                 List<ItemCard> result = new ArrayList<>();
 
                                 for (CartItem cartItem : cartItems) {

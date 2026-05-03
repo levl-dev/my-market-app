@@ -6,18 +6,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
+import ru.yandex.practicum.mymarket.cache.ItemCacheService;
 import ru.yandex.practicum.mymarket.model.Item;
-import ru.yandex.practicum.mymarket.repository.ItemRepository;
 
 @Service
 @RequiredArgsConstructor
 public class ItemService {
 
-    private final ItemRepository itemRepository;
+    private final ItemCacheService itemCacheService;
     private final CartService cartService;
 
     public Mono<ItemCard> getItem(long id) {
-        Mono<Item> itemMono = itemRepository.findById(id)
+        Mono<Item> itemMono = itemCacheService.findById(id)
                 .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found")));
 
         return itemMono.flatMap(item -> cartService.getItemCount(item.getId())

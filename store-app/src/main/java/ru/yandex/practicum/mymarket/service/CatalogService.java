@@ -7,8 +7,8 @@ import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.dto.Paging;
 import ru.yandex.practicum.mymarket.dto.SortType;
+import ru.yandex.practicum.mymarket.cache.ItemCacheService;
 import ru.yandex.practicum.mymarket.model.Item;
-import ru.yandex.practicum.mymarket.repository.ItemRepository;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -19,7 +19,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class CatalogService {
 
-    private final ItemRepository itemRepository;
+    private final ItemCacheService itemCacheService;
     private final CartService cartService;
     private static final int ITEMS_PER_ROW = 3;
 
@@ -38,10 +38,15 @@ public class CatalogService {
     }
 
     private Flux<Item> findItems(String search) {
-        if (search.isBlank()) {
-            return itemRepository.findAll();
-        }
-        return itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(search, search);
+        return itemCacheService.findAllItems()
+                .filter(item -> search.isBlank() || matchesSearch(item, search));
+    }
+
+    private static boolean matchesSearch(Item item, String search) {
+        String needle = search.toLowerCase();
+        String title = item.getTitle() != null ? item.getTitle() : "";
+        String description = item.getDescription() != null ? item.getDescription() : "";
+        return title.toLowerCase().contains(needle) || description.toLowerCase().contains(needle);
     }
 
     private CatalogPageResult toPageData(

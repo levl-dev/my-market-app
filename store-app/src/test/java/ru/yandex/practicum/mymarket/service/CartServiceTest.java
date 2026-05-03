@@ -12,10 +12,11 @@ import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.CartAction;
 import ru.yandex.practicum.mymarket.model.CartItem;
 import ru.yandex.practicum.mymarket.model.Item;
+import ru.yandex.practicum.mymarket.cache.ItemCacheService;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
-import ru.yandex.practicum.mymarket.repository.ItemRepository;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -34,14 +35,14 @@ class CartServiceTest {
     private CartItemRepository cartItemRepository;
 
     @Mock
-    private ItemRepository itemRepository;
+    private ItemCacheService itemCacheService;
 
     private CartService cartService;
 
     @BeforeEach
     void setUp() {
-        cartService = new CartService(cartItemRepository, itemRepository);
-        lenient().when(itemRepository.findById(anyLong())).thenReturn(Mono.empty());
+        cartService = new CartService(cartItemRepository, itemCacheService);
+        lenient().when(itemCacheService.findById(anyLong())).thenReturn(Mono.empty());
     }
 
     @Test
@@ -51,7 +52,7 @@ class CartServiceTest {
         item.setId(1L);
         item.setTitle("T");
         item.setPrice(100L);
-        when(itemRepository.findById(1L)).thenReturn(Mono.just(item));
+        when(itemCacheService.findById(1L)).thenReturn(Mono.just(item));
         doAnswer(invocation -> Mono.just(invocation.getArgument(0)))
                 .when(cartItemRepository)
                 .save(any(CartItem.class));
@@ -132,7 +133,7 @@ class CartServiceTest {
     @Test
     void plusThrowsWhenItemDoesNotExist() {
         when(cartItemRepository.findByItemId(7L)).thenReturn(Mono.empty());
-        when(itemRepository.findById(7L)).thenReturn(Mono.empty());
+        when(itemCacheService.findById(7L)).thenReturn(Mono.empty());
 
         assertThatThrownBy(() -> cartService.changeItemCount(7L, CartAction.PLUS).block())
                 .isInstanceOf(ResponseStatusException.class);
@@ -157,7 +158,7 @@ class CartServiceTest {
         cb.setCount(1);
 
         when(cartItemRepository.findAllByOrderByIdAsc()).thenReturn(Flux.just(ca, cb));
-        when(itemRepository.findAllById(List.of(1L, 2L))).thenReturn(Flux.just(a, b));
+        when(itemCacheService.findByIds(List.of(1L, 2L))).thenReturn(Mono.just(Map.of(1L, a, 2L, b)));
 
         assertThat(cartService.getTotal().block()).isEqualTo(100L * 2 + 50L * 1);
     }

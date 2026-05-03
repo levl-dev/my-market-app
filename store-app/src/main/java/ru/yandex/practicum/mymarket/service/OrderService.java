@@ -13,13 +13,12 @@ import ru.yandex.practicum.mymarket.model.CartItem;
 import ru.yandex.practicum.mymarket.model.Item;
 import ru.yandex.practicum.mymarket.model.Order;
 import ru.yandex.practicum.mymarket.model.OrderItem;
-import ru.yandex.practicum.mymarket.repository.ItemRepository;
+import ru.yandex.practicum.mymarket.cache.ItemCacheService;
 import ru.yandex.practicum.mymarket.repository.OrderItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderRepository;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -28,7 +27,7 @@ import java.util.Map;
 public class OrderService {
 
     private final CartService cartService;
-    private final ItemRepository itemRepository;
+    private final ItemCacheService itemCacheService;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final PaymentClient paymentClient;
@@ -58,17 +57,7 @@ public class OrderService {
                 .map(CartItem::getItemId)
                 .toList();
 
-        return itemRepository.findAllById(itemIds)
-                .collectList()
-                .map(items -> {
-                    Map<Long, Item> itemsById = new HashMap<>();
-
-                    for (Item item : items) {
-                        itemsById.put(item.getId(), item);
-                    }
-
-                    return itemsById;
-                });
+        return itemCacheService.findByIds(itemIds);
     }
 
     private Mono<Long> saveOrder(List<CartItem> cartItems, Map<Long, Item> itemsById) {

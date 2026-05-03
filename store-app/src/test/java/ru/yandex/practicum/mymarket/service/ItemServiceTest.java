@@ -7,8 +7,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
+import ru.yandex.practicum.mymarket.cache.ItemCacheService;
 import ru.yandex.practicum.mymarket.model.Item;
-import ru.yandex.practicum.mymarket.repository.ItemRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -17,7 +17,7 @@ import static org.mockito.Mockito.when;
 class ItemServiceTest {
 
     @Mock
-    private ItemRepository itemRepository;
+    private ItemCacheService itemCacheService;
 
     @Mock
     private CartService cartService;
@@ -33,7 +33,7 @@ class ItemServiceTest {
         item.setDescription("Desc");
         item.setImgPath("/img.png");
         item.setPrice(300L);
-        when(itemRepository.findById(1L)).thenReturn(Mono.just(item));
+        when(itemCacheService.findById(1L)).thenReturn(Mono.just(item));
         when(cartService.getItemCount(1L)).thenReturn(Mono.just(5));
 
         ItemCard card = itemService.getItem(1L).block();
@@ -51,7 +51,7 @@ class ItemServiceTest {
         item.setDescription("");
         item.setImgPath("");
         item.setPrice(1L);
-        when(itemRepository.findById(2L)).thenReturn(Mono.just(item));
+        when(itemCacheService.findById(2L)).thenReturn(Mono.just(item));
         when(cartService.getItemCount(2L)).thenReturn(Mono.just(0));
 
         ItemCard card = itemService.getItem(2L).block();

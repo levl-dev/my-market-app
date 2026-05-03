@@ -7,10 +7,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.cache.ItemCacheService;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.dto.SortType;
 import ru.yandex.practicum.mymarket.model.Item;
-import ru.yandex.practicum.mymarket.repository.ItemRepository;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,8 +18,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,7 +25,7 @@ import static org.mockito.Mockito.when;
 class CatalogServiceTest {
 
     @Mock
-    private ItemRepository itemRepository;
+    private ItemCacheService itemCacheService;
 
     @Mock
     private CartService cartService;
@@ -37,36 +35,32 @@ class CatalogServiceTest {
 
     @Test
     void blankSearchUsesFindAll() {
-        when(itemRepository.findAll()).thenReturn(Flux.empty());
+        when(itemCacheService.findAllItems()).thenReturn(Flux.empty());
         when(cartService.getItemCounts(any())).thenReturn(emptyCounts());
 
         CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 5).block();
 
         assertThat(result).isNotNull();
         assertThat(result.items()).isNotEmpty();
-        verify(itemRepository).findAll();
-        verify(itemRepository, never()).findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
-                any(), any());
+        verify(itemCacheService).findAllItems();
     }
 
     @Test
     void nonBlankSearchUsesSearchMethod() {
-        when(itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(eq("q"), eq("q")))
-                .thenReturn(Flux.empty());
+        when(itemCacheService.findAllItems()).thenReturn(Flux.empty());
         when(cartService.getItemCounts(any())).thenReturn(emptyCounts());
 
         CatalogService.CatalogPageResult result = catalogService.getItems("q", SortType.NO, 1, 5).block();
 
         assertThat(result).isNotNull();
-        verify(itemRepository).findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(eq("q"), eq("q"));
-        verify(itemRepository, never()).findAll();
+        verify(itemCacheService).findAllItems();
     }
 
     @Test
     void sortNoKeepsRepositoryOrder() {
         Item first = item(1L, "b", 30L);
         Item second = item(2L, "a", 10L);
-        when(itemRepository.findAll()).thenReturn(Flux.just(first, second));
+        when(itemCacheService.findAllItems()).thenReturn(Flux.just(first, second));
         when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0)));
 
         CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 10).block();
@@ -79,7 +73,7 @@ class CatalogServiceTest {
     void sortAlphaSortsByTitleCaseInsensitive() {
         Item first = item(1L, "b", 30L);
         Item second = item(2L, "a", 10L);
-        when(itemRepository.findAll()).thenReturn(Flux.just(first, second));
+        when(itemCacheService.findAllItems()).thenReturn(Flux.just(first, second));
         when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0)));
 
         CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.ALPHA, 1, 10).block();
@@ -92,7 +86,7 @@ class CatalogServiceTest {
     void sortPriceSortsByPriceAscending() {
         Item first = item(1L, "a", 30L);
         Item second = item(2L, "b", 10L);
-        when(itemRepository.findAll()).thenReturn(Flux.just(first, second));
+        when(itemCacheService.findAllItems()).thenReturn(Flux.just(first, second));
         when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0)));
 
         CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.PRICE, 1, 10).block();
@@ -113,7 +107,7 @@ class CatalogServiceTest {
             item.setPrice(10L * i);
             content.add(item);
         }
-        when(itemRepository.findAll()).thenReturn(Flux.fromIterable(content));
+        when(itemCacheService.findAllItems()).thenReturn(Flux.fromIterable(content));
         when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0, 3L, 0, 4L, 0)));
 
         CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 10).block();
@@ -129,7 +123,7 @@ class CatalogServiceTest {
 
     @Test
     void emptyCatalogPageYieldsSingleRowOfPlaceholderCards() {
-        when(itemRepository.findAll()).thenReturn(Flux.empty());
+        when(itemCacheService.findAllItems()).thenReturn(Flux.empty());
         when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of()));
 
         CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 5).block();
