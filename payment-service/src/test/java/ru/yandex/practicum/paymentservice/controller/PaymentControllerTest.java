@@ -7,6 +7,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.paymentservice.model.BalanceResponse;
 import ru.yandex.practicum.paymentservice.model.PaymentRequest;
 import ru.yandex.practicum.paymentservice.model.PaymentResponse;
@@ -29,7 +30,7 @@ class PaymentControllerTest {
 
     @Test
     void getBalanceReturnsPayloadFromService() {
-        when(paymentService.getBalance()).thenReturn(new BalanceResponse(42L));
+        when(paymentService.getBalance()).thenReturn(Mono.just(new BalanceResponse(42L)));
 
         webTestClient.get().uri("/balance")
                 .accept(MediaType.APPLICATION_JSON)
@@ -44,7 +45,7 @@ class PaymentControllerTest {
 
     @Test
     void postPaymentDelegatesToServiceAndReturnsJson() {
-        when(paymentService.makePayment(eq(100L))).thenReturn(new PaymentResponse(true, 9_900L, "ok"));
+        when(paymentService.makePayment(eq(100L))).thenReturn(Mono.just(new PaymentResponse(true, 9_900L, "ok")));
 
         webTestClient.post().uri("/payments")
                 .contentType(MediaType.APPLICATION_JSON)
