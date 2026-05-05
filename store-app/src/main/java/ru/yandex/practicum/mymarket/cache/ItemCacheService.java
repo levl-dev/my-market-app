@@ -19,19 +19,22 @@ import java.util.Objects;
 public class ItemCacheService {
 
     private static final String KEY_ITEM_PREFIX = "my-market:item:";
-    private static final String KEY_CATALOG_ALL = "my-market:catalog:all";
+    private static final String KEY_CATALOG_LIMITED = "my-market:catalog:limited";
 
     private final ItemRepository itemRepository;
     private final ReactiveRedisTemplate<String, Item> redis;
     private final Duration ttl;
+    private final long catalogMaxSize;
 
     public ItemCacheService(
             ItemRepository itemRepository,
             ReactiveRedisTemplate<String, Item> redisTemplate,
-            @Value("${app.items.cache.ttl:PT2M}") Duration ttl) {
+            @Value("${app.items.cache.ttl:PT2M}") Duration ttl,
+            @Value("${app.items.cache.catalog-max-size:1000}") long catalogMaxSize) {
         this.itemRepository = itemRepository;
         this.redis = redisTemplate;
         this.ttl = ttl;
+        this.catalogMaxSize = catalogMaxSize;
     }
 
     public Mono<Item> findById(long id) {
@@ -42,10 +45,10 @@ public class ItemCacheService {
     }
 
     public Flux<Item> findAllItems() {
-        return redis.hasKey(KEY_CATALOG_ALL)
+        return redis.hasKey(KEY_CATALOG_LIMITED)
                 .defaultIfEmpty(false)
                 .flatMapMany(cached -> Boolean.TRUE.equals(cached)
-                        ? redis.opsForList().range(KEY_CATALOG_ALL, 0, -1)
+                        ? redis.opsForList().range(KEY_CATALOG_LIMITED, 0, -1)
                         : loadAllFromDbAndPopulateList());
     }
 
@@ -64,15 +67,16 @@ public class ItemCacheService {
 
     private Flux<Item> loadAllFromDbAndPopulateList() {
         return itemRepository.findAll()
+                .take(catalogMaxSize)
                 .collectList()
-                .flatMapMany(list -> redis.delete(KEY_CATALOG_ALL)
+                .flatMapMany(list -> redis.delete(KEY_CATALOG_LIMITED)
                         .then(Mono.defer(() -> {
                             if (list.isEmpty()) {
                                 return Mono.empty();
                             }
                             return redis.opsForList()
-                                    .rightPushAll(KEY_CATALOG_ALL, list.toArray(Item[]::new))
-                                    .then(redis.expire(KEY_CATALOG_ALL, ttl));
+                                    .rightPushAll(KEY_CATALOG_LIMITED, list.toArray(Item[]::new))
+                                    .then(redis.expire(KEY_CATALOG_LIMITED, ttl));
                         }))
                         .thenMany(Flux.fromIterable(list)));
     }

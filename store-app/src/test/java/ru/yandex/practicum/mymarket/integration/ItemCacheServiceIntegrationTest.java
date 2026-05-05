@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ItemCacheServiceIntegrationTest {
 
     private static final String KEY_ITEM_PREFIX = "my-market:item:";
-    private static final String KEY_CATALOG_ALL = "my-market:catalog:all";
+    private static final String KEY_CATALOG_LIMITED = "my-market:catalog:limited";
 
     @Autowired
     private ItemCacheService itemCacheService;
@@ -79,8 +79,8 @@ class ItemCacheServiceIntegrationTest {
         List<Item> loaded = itemCacheService.findAllItems().collectList().block();
 
         assertThat(loaded).hasSize(2);
-        assertThat(redis.hasKey(KEY_CATALOG_ALL).block()).isTrue();
-        List<Item> cached = redis.opsForList().range(KEY_CATALOG_ALL, 0, -1).collectList().block();
+        assertThat(redis.hasKey(KEY_CATALOG_LIMITED).block()).isTrue();
+        List<Item> cached = redis.opsForList().range(KEY_CATALOG_LIMITED, 0, -1).collectList().block();
         assertThat(cached).hasSize(2);
         assertThat(cached).extracting(Item::getTitle).containsExactlyInAnyOrder("Ball", "Mug");
     }
@@ -93,7 +93,7 @@ class ItemCacheServiceIntegrationTest {
         return redis.scan(options)
                 .collectList()
                 .flatMap(keys -> keys.isEmpty() ? Mono.empty() : redis.delete(Flux.fromIterable(keys)).then())
-                .then(redis.delete(KEY_CATALOG_ALL).then());
+                .then(redis.delete(KEY_CATALOG_LIMITED).then());
     }
 
     private static Item item(String title, long price) {
