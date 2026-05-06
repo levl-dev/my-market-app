@@ -10,6 +10,7 @@ import ru.yandex.practicum.paymentservice.model.PaymentResponse;
 public class PaymentService {
 
     private static final long INITIAL_BALANCE = 10_000L;
+    private static final int MAX_RETRIES = 100;
 
     private final AtomicLong balance = new AtomicLong(INITIAL_BALANCE);
 
@@ -18,17 +19,23 @@ public class PaymentService {
     }
 
     public Mono<PaymentResponse> makePayment(long amount) {
-        while (true) {
+        if (amount < 0) {
+            return Mono.just(new PaymentResponse(false, balance.get(), "Amount must be non-negative"));
+        }
+        if (amount == 0) {
+            return Mono.just(new PaymentResponse(true, balance.get(), "Payment completed"));
+        }
+        for (int i = 0; i < MAX_RETRIES; i++) {
             long current = balance.get();
-
             if (amount > current) {
                 return Mono.just(new PaymentResponse(false, current, "Not enough balance"));
             }
-
             long updated = current - amount;
             if (balance.compareAndSet(current, updated)) {
                 return Mono.just(new PaymentResponse(true, updated, "Payment completed"));
             }
+            Thread.onSpinWait();
         }
+        return Mono.just(new PaymentResponse(false, balance.get(), "Payment retry limit exceeded"));
     }
 }

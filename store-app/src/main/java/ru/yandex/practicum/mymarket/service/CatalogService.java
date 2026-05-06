@@ -1,6 +1,7 @@
 package ru.yandex.practicum.mymarket.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -21,6 +22,10 @@ public class CatalogService {
 
     private final ItemCacheService itemCacheService;
     private final CartService cartService;
+
+    @Value("${app.items.catalog.max-in-memory-items:1000}")
+    private int maxInMemoryItems;
+
     private static final int ITEMS_PER_ROW = 3;
 
     public Mono<CatalogPageResult> getItems(String search, SortType sort, int pageNumber, int pageSize) {
@@ -39,6 +44,7 @@ public class CatalogService {
 
     private Flux<Item> findItems(String search) {
         return itemCacheService.findAllItems()
+                .take(maxInMemoryItems)
                 .filter(item -> search.isBlank() || matchesSearch(item, search));
     }
 

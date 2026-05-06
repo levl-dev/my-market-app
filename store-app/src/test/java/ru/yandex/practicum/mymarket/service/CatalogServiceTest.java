@@ -1,10 +1,12 @@
 package ru.yandex.practicum.mymarket.service;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.cache.ItemCacheService;
@@ -32,6 +34,11 @@ class CatalogServiceTest {
 
     @InjectMocks
     private CatalogService catalogService;
+
+    @BeforeEach
+    void setMaxInMemoryItems() {
+        ReflectionTestUtils.setField(catalogService, "maxInMemoryItems", 1000);
+    }
 
     @Test
     void blankSearchUsesFindAll() {
