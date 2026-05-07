@@ -16,8 +16,6 @@ import ru.yandex.practicum.mymarket.repository.ItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderRepository;
 
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -25,7 +23,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ItemCacheServiceIntegrationTest {
 
     private static final String KEY_ITEM_PREFIX = "my-market:item:";
-    private static final String KEY_CATALOG_LIMITED = "my-market:catalog:limited";
 
     @Autowired
     private ItemCacheService itemCacheService;
@@ -71,20 +68,6 @@ class ItemCacheServiceIntegrationTest {
         assertThat(cached.getTitle()).isEqualTo(saved.getTitle());
     }
 
-    @Test
-    void findAllItemsCachesCatalog() {
-        itemRepository.save(item("Ball", 2500L)).block();
-        itemRepository.save(item("Mug", 700L)).block();
-
-        List<Item> loaded = itemCacheService.findAllItems().collectList().block();
-
-        assertThat(loaded).hasSize(2);
-        assertThat(redis.hasKey(KEY_CATALOG_LIMITED).block()).isTrue();
-        List<Item> cached = redis.opsForList().range(KEY_CATALOG_LIMITED, 0, -1).collectList().block();
-        assertThat(cached).hasSize(2);
-        assertThat(cached).extracting(Item::getTitle).containsExactlyInAnyOrder("Ball", "Mug");
-    }
-
     private Mono<Void> cleanRedisCacheKeys() {
         ScanOptions options = ScanOptions.scanOptions()
                 .match(KEY_ITEM_PREFIX + "*")
@@ -92,8 +75,7 @@ class ItemCacheServiceIntegrationTest {
                 .build();
         return redis.scan(options)
                 .collectList()
-                .flatMap(keys -> keys.isEmpty() ? Mono.empty() : redis.delete(Flux.fromIterable(keys)).then())
-                .then(redis.delete(KEY_CATALOG_LIMITED).then());
+                .flatMap(keys -> keys.isEmpty() ? Mono.empty() : redis.delete(Flux.fromIterable(keys)).then());
     }
 
     private static Item item(String title, long price) {

@@ -46,6 +46,22 @@ class ItemRepositoryTest {
         assertThat(found).extracting(Item::getTitle).containsExactlyInAnyOrder("TestItem2", "TestItem1 key");
     }
 
+    @Test
+    void findPageOrderByPriceAppliesSearchLimitAndOffset() {
+        itemRepository.save(item("Keyboard", "mechanical", 5000L)).block();
+        itemRepository.save(item("Mouse", "wireless", 2000L)).block();
+        itemRepository.save(item("Headphones", "wireless", 7000L)).block();
+
+        Long count = itemRepository.countBySearch("wire").block();
+        List<Item> found = itemRepository.findPageOrderByPrice("wire", 1, 1)
+                .collectList()
+                .block();
+
+        assertThat(count).isEqualTo(2L);
+        assertThat(found).hasSize(1);
+        assertThat(found.get(0).getTitle()).isEqualTo("Headphones");
+    }
+
     private static Item item(String title, String description, long price) {
         Item item = new Item();
         item.setTitle(title);
