@@ -1,0 +1,81 @@
+openapi: 3.0.3
+
+info:
+  title: Payment Service API
+  version: 1.0.0
+  description: API for checking balance and processing payments
+
+servers:
+  - url: http://localhost:8081
+
+paths:
+  /balance:
+    get:
+      operationId: getBalance
+      summary: Get current balance
+      responses:
+        '200':
+          description: Current balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+
+  /payments:
+    post:
+      operationId: makePayment
+      summary: Perform payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '200':
+          description: Payment result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+
+components:
+  schemas:
+    BalanceResponse:
+      type: object
+      required:
+        - balance
+      properties:
+        balance:
+          type: integer
+          format: int64
+          example: 10000
+
+    PaymentRequest:
+      type: object
+      required:
+        - amount
+      properties:
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+          example: 2500
+
+    PaymentResponse:
+      type: object
+      required:
+        - success
+        - balance
+        - message
+      properties:
+        success:
+          type: boolean
+          example: true
+        balance:
+          type: integer
+          format: int64
+          example: 7500
+        message:
+          type: string
+          example: Payment completed
