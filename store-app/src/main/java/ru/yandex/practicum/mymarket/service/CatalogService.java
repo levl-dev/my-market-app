@@ -1,18 +1,16 @@
 package ru.yandex.practicum.mymarket.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.dto.Paging;
 import ru.yandex.practicum.mymarket.dto.SortType;
-import ru.yandex.practicum.mymarket.cache.ItemCacheService;
 import ru.yandex.practicum.mymarket.model.Item;
+import ru.yandex.practicum.mymarket.repository.ItemRepository;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -20,11 +18,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class CatalogService {
 
-    private final ItemCacheService itemCacheService;
     private final CartService cartService;
-
-    @Value("${app.items.catalog.max-in-memory-items:1000}")
-    private int maxInMemoryItems;
+    private final ItemRepository itemRepository;
 
     private static final int ITEMS_PER_ROW = 3;
 
@@ -33,26 +28,37 @@ public class CatalogService {
         SortType safeSort = sort == null ? SortType.NO : sort;
         int safePageSize = pageSize > 0 ? pageSize : 10;
 
-        return findItems(safeSearch)
-                .collectList()
-                .flatMap(items -> {
+        return itemRepository.countBySearch(safeSearch)
+                .flatMap(totalItems -> {
+                    int pagesCount = pagesCount(totalItems, safePageSize);
+                    int safePageNumber = safePageNumber(pageNumber, pagesCount);
+                    long offset = (long) (safePageNumber - 1) * safePageSize;
+                    return findItemsPage(safeSearch, safeSort, safePageSize, offset).collectList()
+                            .map(items -> new CatalogQueryResult(items, totalItems, pagesCount, safePageNumber));
+                })
+                .flatMap(result -> {
+                    List<Item> items = result.items();
                     List<Long> itemIds = items.stream().map(Item::getId).toList();
                     return cartService.getItemCounts(itemIds)
-                            .map(counts -> toPageData(items, counts, safeSearch, safeSort, pageNumber, safePageSize));
+                            .map(counts -> toPageData(
+                                    items,
+                                    counts,
+                                    safeSearch,
+                                    safeSort,
+                                    safePageSize,
+                                    result.pagesCount(),
+                                    result.pageNumber()));
                 });
     }
 
-    private Flux<Item> findItems(String search) {
-        return itemCacheService.findAllItems()
-                .take(maxInMemoryItems)
-                .filter(item -> search.isBlank() || matchesSearch(item, search));
-    }
-
-    private static boolean matchesSearch(Item item, String search) {
-        String needle = search.toLowerCase();
-        String title = item.getTitle() != null ? item.getTitle() : "";
-        String description = item.getDescription() != null ? item.getDescription() : "";
-        return title.toLowerCase().contains(needle) || description.toLowerCase().contains(needle);
+    private Flux<Item> findItemsPage(String search, SortType sort, int pageSize, long offset) {
+        if (sort == SortType.ALPHA) {
+            return itemRepository.findPageOrderByTitle(search, pageSize, offset);
+        }
+        if (sort == SortType.PRICE) {
+            return itemRepository.findPageOrderByPrice(search, pageSize, offset);
+        }
+        return itemRepository.findPageOrderById(search, pageSize, offset);
     }
 
     private CatalogPageResult toPageData(
@@ -60,40 +66,28 @@ public class CatalogService {
             Map<Long, Integer> counts,
             String search,
             SortType sort,
-            int pageNumber,
-            int pageSize
+            int pageSize,
+            int pagesCount,
+            int pageNumber
     ) {
         List<ItemCard> cards = items.stream()
                 .map(item -> toItemCard(item, counts.getOrDefault(item.getId(), 0)))
                 .toList();
 
-        List<ItemCard> sortedCards = sortCards(cards, sort);
-        int pagesCount = Math.max((int) Math.ceil((double) sortedCards.size() / pageSize), 1);
-        int safePageNumber = Math.min(Math.max(pageNumber, 1), pagesCount);
-        int from = (safePageNumber - 1) * pageSize;
-        int to = Math.min(from + pageSize, sortedCards.size());
-        List<ItemCard> pageItems = from < to ? sortedCards.subList(from, to) : List.of();
-
         return new CatalogPageResult(
-                splitIntoRows(pageItems),
+                splitIntoRows(cards),
                 search,
                 sort,
-                new Paging(pageSize, safePageNumber, safePageNumber > 1, safePageNumber < pagesCount)
+                new Paging(pageSize, pageNumber, pageNumber > 1, pageNumber < pagesCount)
         );
     }
 
-    private List<ItemCard> sortCards(List<ItemCard> cards, SortType sort) {
-        if (sort == SortType.ALPHA) {
-            return cards.stream()
-                    .sorted(Comparator.comparing(ItemCard::title, String.CASE_INSENSITIVE_ORDER))
-                    .toList();
-        }
-        if (sort == SortType.PRICE) {
-            return cards.stream()
-                    .sorted(Comparator.comparingLong(ItemCard::price))
-                    .toList();
-        }
-        return cards;
+    private int pagesCount(long totalItems, int pageSize) {
+        return Math.max((int) Math.ceil((double) totalItems / pageSize), 1);
+    }
+
+    private int safePageNumber(int pageNumber, int pagesCount) {
+        return Math.min(Math.max(pageNumber, 1), pagesCount);
     }
 
     private ItemCard toItemCard(Item item, int count) {
@@ -134,6 +128,14 @@ public class CatalogService {
             String search,
             SortType sort,
             Paging paging
+    ) {
+    }
+
+    private record CatalogQueryResult(
+            List<Item> items,
+            long totalItems,
+            int pagesCount,
+            int pageNumber
     ) {
     }
 }
