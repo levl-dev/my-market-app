@@ -1,18 +1,16 @@
 package ru.yandex.practicum.mymarket.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.dto.Paging;
 import ru.yandex.practicum.mymarket.dto.SortType;
-import ru.yandex.practicum.mymarket.cache.ItemCacheService;
 import ru.yandex.practicum.mymarket.model.Item;
+import ru.yandex.practicum.mymarket.repository.ItemRepository;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -20,11 +18,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class CatalogService {
 
-    private final ItemCacheService itemCacheService;
+    private final ItemRepository itemRepository;
     private final CartService cartService;
-
-    @Value("${app.items.catalog.max-in-memory-items:1000}")
-    private int maxInMemoryItems;
 
     private static final int ITEMS_PER_ROW = 3;
 
@@ -33,26 +28,30 @@ public class CatalogService {
         SortType safeSort = sort == null ? SortType.NO : sort;
         int safePageSize = pageSize > 0 ? pageSize : 10;
 
-        return findItems(safeSearch)
-                .collectList()
-                .flatMap(items -> {
-                    List<Long> itemIds = items.stream().map(Item::getId).toList();
-                    return cartService.getItemCounts(itemIds)
-                            .map(counts -> toPageData(items, counts, safeSearch, safeSort, pageNumber, safePageSize));
+        return itemRepository.countBySearch(safeSearch)
+                .flatMap(totalItems -> {
+                    int pagesCount = Math.max((int) Math.ceil((double) totalItems / safePageSize), 1);
+                    int safePageNumber = Math.min(Math.max(pageNumber, 1), pagesCount);
+                    long offset = (long) (safePageNumber - 1) * safePageSize;
+
+                    return findPageItems(safeSearch, safeSort, safePageSize, offset)
+                            .collectList()
+                            .flatMap(items -> {
+                                List<Long> itemIds = items.stream().map(Item::getId).toList();
+                                return cartService.getItemCounts(itemIds)
+                                        .map(counts -> toPageData(items, counts, safeSearch, safeSort, safePageSize, safePageNumber, pagesCount));
+                            });
                 });
     }
 
-    private Flux<Item> findItems(String search) {
-        return itemCacheService.findAllItems()
-                .take(maxInMemoryItems)
-                .filter(item -> search.isBlank() || matchesSearch(item, search));
-    }
-
-    private static boolean matchesSearch(Item item, String search) {
-        String needle = search.toLowerCase();
-        String title = item.getTitle() != null ? item.getTitle() : "";
-        String description = item.getDescription() != null ? item.getDescription() : "";
-        return title.toLowerCase().contains(needle) || description.toLowerCase().contains(needle);
+    private Flux<Item> findPageItems(String search, SortType sort, int limit, long offset) {
+        if (sort == SortType.ALPHA) {
+            return itemRepository.findPageOrderByTitle(search, limit, offset);
+        }
+        if (sort == SortType.PRICE) {
+            return itemRepository.findPageOrderByPrice(search, limit, offset);
+        }
+        return itemRepository.findPageOrderById(search, limit, offset);
     }
 
     private CatalogPageResult toPageData(
@@ -60,40 +59,20 @@ public class CatalogService {
             Map<Long, Integer> counts,
             String search,
             SortType sort,
+            int pageSize,
             int pageNumber,
-            int pageSize
+            int pagesCount
     ) {
         List<ItemCard> cards = items.stream()
                 .map(item -> toItemCard(item, counts.getOrDefault(item.getId(), 0)))
                 .toList();
 
-        List<ItemCard> sortedCards = sortCards(cards, sort);
-        int pagesCount = Math.max((int) Math.ceil((double) sortedCards.size() / pageSize), 1);
-        int safePageNumber = Math.min(Math.max(pageNumber, 1), pagesCount);
-        int from = (safePageNumber - 1) * pageSize;
-        int to = Math.min(from + pageSize, sortedCards.size());
-        List<ItemCard> pageItems = from < to ? sortedCards.subList(from, to) : List.of();
-
         return new CatalogPageResult(
-                splitIntoRows(pageItems),
+                splitIntoRows(cards),
                 search,
                 sort,
-                new Paging(pageSize, safePageNumber, safePageNumber > 1, safePageNumber < pagesCount)
+                new Paging(pageSize, pageNumber, pageNumber > 1, pageNumber < pagesCount)
         );
-    }
-
-    private List<ItemCard> sortCards(List<ItemCard> cards, SortType sort) {
-        if (sort == SortType.ALPHA) {
-            return cards.stream()
-                    .sorted(Comparator.comparing(ItemCard::title, String.CASE_INSENSITIVE_ORDER))
-                    .toList();
-        }
-        if (sort == SortType.PRICE) {
-            return cards.stream()
-                    .sorted(Comparator.comparingLong(ItemCard::price))
-                    .toList();
-        }
-        return cards;
     }
 
     private ItemCard toItemCard(Item item, int count) {
