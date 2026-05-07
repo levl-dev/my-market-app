@@ -13,6 +13,7 @@ import java.util.List;
 import ru.yandex.practicum.mymarket.client.PaymentClient;
 import ru.yandex.practicum.mymarket.dto.CartAction;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
+import ru.yandex.practicum.mymarket.security.CurrentUserService;
 import ru.yandex.practicum.mymarket.service.CartService;
 
 @Controller
@@ -24,19 +25,22 @@ public class CartController {
 
     private final CartService cartService;
     private final PaymentClient paymentClient;
+    private final CurrentUserService currentUserService;
 
     @GetMapping("/cart/items")
     public Mono<Rendering> getCart() {
-        return renderCart();
+        return currentUserService.currentUserId().flatMap(this::renderCart);
     }
 
     @PostMapping("/cart/items")
     public Mono<Rendering> changeCartItem(@RequestParam long id, @RequestParam CartAction action) {
-        return cartService.changeItemCount(id, action).then(renderCart());
+        return currentUserService.currentUserId()
+                .flatMap(userId -> cartService.changeItemCount(userId, id, action)
+                        .then(renderCart(userId)));
     }
 
-    private Mono<Rendering> renderCart() {
-        return cartService.getCartItems()
+    private Mono<Rendering> renderCart(long userId) {
+        return cartService.getCartItems(userId)
                 .flatMap(items -> {
                     long total = cartTotal(items);
                     return paymentClient.getBalance()

@@ -24,6 +24,10 @@ public class CatalogService {
     private static final int ITEMS_PER_ROW = 3;
 
     public Mono<CatalogPageResult> getItems(String search, SortType sort, int pageNumber, int pageSize) {
+        return getItems(search, sort, pageNumber, pageSize, null);
+    }
+
+    public Mono<CatalogPageResult> getItems(String search, SortType sort, int pageNumber, int pageSize, Long userId) {
         String safeSearch = search == null ? "" : search.trim();
         SortType safeSort = sort == null ? SortType.NO : sort;
         int safePageSize = pageSize > 0 ? pageSize : 10;
@@ -38,7 +42,10 @@ public class CatalogService {
                             .collectList()
                             .flatMap(items -> {
                                 List<Long> itemIds = items.stream().map(Item::getId).toList();
-                                return cartService.getItemCounts(itemIds)
+                                Mono<Map<Long, Integer>> countsMono = userId == null
+                                        ? Mono.just(Map.of())
+                                        : cartService.getItemCounts(userId, itemIds);
+                                return countsMono
                                         .map(counts -> toPageData(items, counts, safeSearch, safeSort, safePageSize, safePageNumber, pagesCount));
                             });
                 });

@@ -12,4 +12,5 @@ INSERT INTO items (title, description, img_path, price) VALUES
 ('Термос', 'Металлический термос объёмом 500 мл.', '/images/thermos.png', 1900);
 
 INSERT INTO app_users (username, password, enabled) VALUES
-('user', '$2a$10$psorxjrC7pT9mVt0irwcDu1GULYUYyrPjyLcU19flDXCelT0E0wXS', true);
+('user1', '$2a$10$psorxjrC7pT9mVt0irwcDu1GULYUYyrPjyLcU19flDXCelT0E0wXS', true),
+('user2', '$2a$10$psorxjrC7pT9mVt0irwcDu1GULYUYyrPjyLcU19flDXCelT0E0wXS', true);

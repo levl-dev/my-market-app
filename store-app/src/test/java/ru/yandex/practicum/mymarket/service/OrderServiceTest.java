@@ -31,6 +31,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
+    private static final long USER_ID = 1L;
 
     @Mock
     private CartService cartService;
@@ -70,7 +71,7 @@ class OrderServiceTest {
 
         long totalPrice = 200L * 2 + 50L * 1;
 
-        when(cartService.getCartItemsForOrder()).thenReturn(Mono.just(List.of(line1, line2)));
+        when(cartService.getCartItemsForOrder(USER_ID)).thenReturn(Mono.just(List.of(line1, line2)));
         when(itemCacheService.findByIds(List.of(10L, 20L))).thenReturn(Mono.just(Map.of(10L, item1, 20L, item2)));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
             Order o = invocation.getArgument(0);
@@ -78,16 +79,17 @@ class OrderServiceTest {
             return Mono.just(o);
         });
         when(orderItemRepository.saveAll(anyIterable())).thenReturn(Flux.empty());
-        when(cartService.clearCart()).thenReturn(Mono.empty());
+        when(cartService.clearCart(USER_ID)).thenReturn(Mono.empty());
         when(paymentClient.pay(eq(totalPrice)))
                 .thenReturn(Mono.just(new PaymentResponse(true, 9_000L, "Payment completed")));
 
-        long id = orderService.createOrderFromCart().block();
+        long id = orderService.createOrderFromCart(USER_ID).block();
         assertThat(id).isEqualTo(99L);
 
         ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
         verify(orderRepository).save(orderCaptor.capture());
         Order saved = orderCaptor.getValue();
+        assertThat(saved.getUserId()).isEqualTo(USER_ID);
         assertThat(saved.getTotalSum()).isEqualTo(totalPrice);
 
         @SuppressWarnings("unchecked")
@@ -109,7 +111,7 @@ class OrderServiceTest {
         assertThat(second.getPrice()).isEqualTo(50L);
         assertThat(second.getCount()).isEqualTo(1);
 
-        verify(cartService).clearCart();
+        verify(cartService).clearCart(USER_ID);
         verify(paymentClient).pay(eq(totalPrice));
     }
 }

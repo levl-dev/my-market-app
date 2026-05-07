@@ -14,6 +14,7 @@ import ru.yandex.practicum.mymarket.config.SecurityConfig;
 import ru.yandex.practicum.mymarket.client.PaymentClient;
 import ru.yandex.practicum.mymarket.dto.CartAction;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
+import ru.yandex.practicum.mymarket.security.CurrentUserService;
 import ru.yandex.practicum.mymarket.service.CartService;
 
 import java.util.List;
@@ -27,6 +28,7 @@ import static org.mockito.Mockito.when;
 @ActiveProfiles("test")
 @Import(SecurityConfig.class)
 class CartControllerTest {
+    private static final long USER_ID = 1L;
 
     @Autowired
     private WebTestClient webTestClient;
@@ -37,11 +39,15 @@ class CartControllerTest {
     @MockBean
     private PaymentClient paymentClient;
 
+    @MockBean
+    private CurrentUserService currentUserService;
+
     @Test
     @WithMockUser(username = "user")
     void getCartReturnsCartViewWithModel() {
         List<ItemCard> lines = List.of(new ItemCard(1L, "a", "", "/x", 10L, 2));
-        when(cartService.getCartItems()).thenReturn(Mono.just(lines));
+        when(currentUserService.currentUserId()).thenReturn(Mono.just(USER_ID));
+        when(cartService.getCartItems(USER_ID)).thenReturn(Mono.just(lines));
         when(paymentClient.getBalance()).thenReturn(Mono.just(1_000_000L));
 
         webTestClient.get().uri("/cart/items")
@@ -64,8 +70,9 @@ class CartControllerTest {
     @WithMockUser(username = "user")
     void postCartItemsReturnsCartView() {
         List<ItemCard> lines = List.of();
-        when(cartService.changeItemCount(eq(3L), eq(CartAction.DELETE))).thenReturn(Mono.empty());
-        when(cartService.getCartItems()).thenReturn(Mono.just(lines));
+        when(currentUserService.currentUserId()).thenReturn(Mono.just(USER_ID));
+        when(cartService.changeItemCount(eq(USER_ID), eq(3L), eq(CartAction.DELETE))).thenReturn(Mono.empty());
+        when(cartService.getCartItems(USER_ID)).thenReturn(Mono.just(lines));
         when(paymentClient.getBalance()).thenReturn(Mono.just(0L));
 
         webTestClient.post().uri("/cart/items?id=3&action=DELETE")
@@ -73,6 +80,6 @@ class CartControllerTest {
                 .expectStatus().isOk()
                 .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_HTML);
 
-        verify(cartService).changeItemCount(eq(3L), eq(CartAction.DELETE));
+        verify(cartService).changeItemCount(eq(USER_ID), eq(3L), eq(CartAction.DELETE));
     }
 }

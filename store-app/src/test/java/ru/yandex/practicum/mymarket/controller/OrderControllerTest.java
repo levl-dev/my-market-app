@@ -13,6 +13,7 @@ import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.config.SecurityConfig;
 import ru.yandex.practicum.mymarket.dto.OrderItemView;
 import ru.yandex.practicum.mymarket.dto.OrderView;
+import ru.yandex.practicum.mymarket.security.CurrentUserService;
 import ru.yandex.practicum.mymarket.service.OrderService;
 
 import java.util.List;
@@ -24,6 +25,7 @@ import static org.mockito.Mockito.when;
 @ActiveProfiles("test")
 @Import(SecurityConfig.class)
 class OrderControllerTest {
+    private static final long USER_ID = 1L;
 
     @Autowired
     private WebTestClient webTestClient;
@@ -31,11 +33,15 @@ class OrderControllerTest {
     @MockBean
     private OrderService orderService;
 
+    @MockBean
+    private CurrentUserService currentUserService;
+
     @Test
     @WithMockUser(username = "user")
     void getOrdersReturnsOrdersView() {
         List<OrderView> orders = List.of(new OrderView(1L, List.of(new OrderItemView(10L, "A", 100L, 1)), 100L));
-        when(orderService.getOrders()).thenReturn(Mono.just(orders));
+        when(currentUserService.currentUserId()).thenReturn(Mono.just(USER_ID));
+        when(orderService.getOrders(USER_ID)).thenReturn(Mono.just(orders));
 
         webTestClient.get().uri("/orders")
                 .accept(MediaType.TEXT_HTML)
@@ -50,7 +56,8 @@ class OrderControllerTest {
     @WithMockUser(username = "user")
     void getOrderByIdReturnsOrderViewAndNewOrderFlag() {
         OrderView order = new OrderView(7L, List.of(), 0L);
-        when(orderService.getOrder(7L)).thenReturn(Mono.just(order));
+        when(currentUserService.currentUserId()).thenReturn(Mono.just(USER_ID));
+        when(orderService.getOrder(USER_ID, 7L)).thenReturn(Mono.just(order));
 
         webTestClient.get().uri(uriBuilder -> uriBuilder.path("/orders/{id}")
                         .queryParam("newOrder", "true")

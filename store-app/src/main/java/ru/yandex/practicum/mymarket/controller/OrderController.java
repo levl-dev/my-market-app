@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.reactive.result.view.Rendering;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.security.CurrentUserService;
 import ru.yandex.practicum.mymarket.service.OrderService;
 
 @Controller
@@ -14,10 +15,12 @@ import ru.yandex.practicum.mymarket.service.OrderService;
 public class OrderController {
 
     private final OrderService orderService;
+    private final CurrentUserService currentUserService;
 
     @GetMapping("/orders")
     public Mono<Rendering> getOrders() {
-        return orderService.getOrders()
+        return currentUserService.currentUserId()
+                .flatMap(orderService::getOrders)
                 .map(orders -> Rendering.view("orders")
                         .modelAttribute("orders", orders)
                         .build());
@@ -28,7 +31,8 @@ public class OrderController {
             @PathVariable long id,
             @RequestParam(defaultValue = "false") boolean newOrder
     ) {
-        return orderService.getOrder(id)
+        return currentUserService.currentUserId()
+                .flatMap(userId -> orderService.getOrder(userId, id))
                 .map(order -> Rendering.view("order")
                         .modelAttribute("order", order)
                         .modelAttribute("newOrder", newOrder)

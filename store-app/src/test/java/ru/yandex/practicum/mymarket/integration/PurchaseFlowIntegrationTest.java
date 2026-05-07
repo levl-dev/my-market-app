@@ -7,10 +7,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.model.AppUser;
 import ru.yandex.practicum.mymarket.model.CartItem;
 import ru.yandex.practicum.mymarket.model.Item;
 import ru.yandex.practicum.mymarket.model.Order;
 import ru.yandex.practicum.mymarket.model.OrderItem;
+import ru.yandex.practicum.mymarket.repository.AppUserRepository;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.ItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderItemRepository;
@@ -28,9 +30,13 @@ import static org.mockito.Mockito.when;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("test")
 class PurchaseFlowIntegrationTest {
+    private static final String PASSWORD = "unused";
 
     @Autowired
     private ItemRepository itemRepository;
+
+    @Autowired
+    private AppUserRepository appUserRepository;
 
     @Autowired
     private CartItemRepository cartItemRepository;
@@ -54,22 +60,25 @@ class PurchaseFlowIntegrationTest {
         orderItemRepository.deleteAll()
                 .then(orderRepository.deleteAll())
                 .then(cartItemRepository.deleteAll())
+                .then(appUserRepository.deleteAll())
                 .then(itemRepository.deleteAll())
                 .block();
     }
 
     @Test
     void createOrderFromCartCreatesOrderWithSnapshotAndClearsCart() {
+        AppUser user = appUserRepository.save(user("buyer")).block();
         Item ball = itemRepository.save(item("Ball", 2500L)).block();
         Item mug = itemRepository.save(item("Mug", 700L)).block();
 
-        cartItemRepository.save(cartItem(ball.getId(), 2)).block();
-        cartItemRepository.save(cartItem(mug.getId(), 1)).block();
+        cartItemRepository.save(cartItem(user.getId(), ball.getId(), 2)).block();
+        cartItemRepository.save(cartItem(user.getId(), mug.getId(), 1)).block();
 
-        long id = orderService.createOrderFromCart().block();
+        long id = orderService.createOrderFromCart(user.getId()).block();
 
-        OrderSnapshot snap = snapshot(id, ball.getId(), mug.getId()).block();
+        OrderSnapshot snap = snapshot(id, user.getId(), ball.getId(), mug.getId()).block();
 
+        assertThat(snap.order().getUserId()).isEqualTo(user.getId());
         assertThat(snap.order().getTotalSum()).isEqualTo(5700L);
         assertThat(snap.orderItems()).hasSize(2);
         assertThat(snap.orderItems())
@@ -81,11 +90,37 @@ class PurchaseFlowIntegrationTest {
         assertThat(snap.cartRows()).isZero();
     }
 
-    private Mono<OrderSnapshot> snapshot(long orderId, long ballId, long mugId) {
+    @Test
+    void getOrdersAndGetOrderReturnOnlyUsersOrders() {
+        AppUser first = appUserRepository.save(user("first")).block();
+        AppUser second = appUserRepository.save(user("second")).block();
+
+        Order firstOrder = new Order();
+        firstOrder.setUserId(first.getId());
+        firstOrder.setTotalSum(100L);
+        firstOrder.setCreatedAt(java.time.LocalDateTime.now());
+        firstOrder = orderRepository.save(firstOrder).block();
+
+        Order secondOrder = new Order();
+        secondOrder.setUserId(second.getId());
+        secondOrder.setTotalSum(200L);
+        secondOrder.setCreatedAt(java.time.LocalDateTime.now());
+        secondOrder = orderRepository.save(secondOrder).block();
+
+        List<Order> firstOrders = orderRepository.findAllByUserIdOrderByIdDesc(first.getId()).collectList().block();
+        Order visible = orderRepository.findByIdAndUserId(firstOrder.getId(), first.getId()).block();
+        Order hidden = orderRepository.findByIdAndUserId(secondOrder.getId(), first.getId()).block();
+
+        assertThat(firstOrders).extracting(Order::getId).containsExactly(firstOrder.getId());
+        assertThat(visible).isNotNull();
+        assertThat(hidden).isNull();
+    }
+
+    private Mono<OrderSnapshot> snapshot(long orderId, long userId, long ballId, long mugId) {
         return Mono.zip(
                 orderRepository.findById(orderId).single(),
                 orderItemRepository.findByOrderId(orderId).collectList(),
-                cartItemRepository.findAll().count()
+                cartItemRepository.findAllByUserIdOrderByIdAsc(userId).count()
         ).map(t -> new OrderSnapshot(t.getT1(), t.getT2(), t.getT3(), ballId, mugId));
     }
 
@@ -101,10 +136,19 @@ class PurchaseFlowIntegrationTest {
         return item;
     }
 
-    private static CartItem cartItem(long itemId, int count) {
+    private static CartItem cartItem(long userId, long itemId, int count) {
         CartItem cartItem = new CartItem();
+        cartItem.setUserId(userId);
         cartItem.setItemId(itemId);
         cartItem.setCount(count);
         return cartItem;
+    }
+
+    private static AppUser user(String username) {
+        AppUser appUser = new AppUser();
+        appUser.setUsername(username);
+        appUser.setPassword(PASSWORD);
+        appUser.setEnabled(true);
+        return appUser;
     }
 }

@@ -32,14 +32,14 @@ public class OrderService {
     private final OrderItemRepository orderItemRepository;
     private final PaymentClient paymentClient;
 
-    public Mono<Long> createOrderFromCart() {
-        return cartService.getCartItemsForOrder()
+    public Mono<Long> createOrderFromCart(long userId) {
+        return cartService.getCartItemsForOrder(userId)
                 .flatMap(cartItems -> loadItemsById(cartItems)
                         .flatMap(itemsById -> {
                             long totalAmount = calculateTotal(cartItems, itemsById);
                             return paymentClient.pay(totalAmount)
                                     .flatMap(this::requirePaymentSuccess)
-                                    .then(saveOrder(cartItems, itemsById));
+                                    .then(saveOrder(userId, cartItems, itemsById));
                         }));
     }
 
@@ -60,8 +60,9 @@ public class OrderService {
         return itemCacheService.findByIds(itemIds);
     }
 
-    private Mono<Long> saveOrder(List<CartItem> cartItems, Map<Long, Item> itemsById) {
+    private Mono<Long> saveOrder(long userId, List<CartItem> cartItems, Map<Long, Item> itemsById) {
         Order order = new Order();
+        order.setUserId(userId);
         order.setCreatedAt(LocalDateTime.now());
         order.setTotalSum(calculateTotal(cartItems, itemsById));
 
@@ -74,19 +75,19 @@ public class OrderService {
                     }
 
                     return orderItemRepository.saveAll(orderItems)
-                            .then(cartService.clearCart())
+                            .then(cartService.clearCart(userId))
                             .thenReturn(savedOrder.getId());
                 });
     }
 
-    public Mono<List<OrderView>> getOrders() {
-        return orderRepository.findAllByOrderByIdDesc()
+    public Mono<List<OrderView>> getOrders(long userId) {
+        return orderRepository.findAllByUserIdOrderByIdDesc(userId)
                 .concatMap(this::toOrderView)
                 .collectList();
     }
 
-    public Mono<OrderView> getOrder(long id) {
-        return orderRepository.findById(id)
+    public Mono<OrderView> getOrder(long userId, long id) {
+        return orderRepository.findByIdAndUserId(id, userId)
                 .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found")))
                 .flatMap(this::toOrderView);
     }

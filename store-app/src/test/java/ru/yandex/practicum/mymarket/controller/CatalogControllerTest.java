@@ -13,6 +13,7 @@ import ru.yandex.practicum.mymarket.config.SecurityConfig;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.dto.Paging;
 import ru.yandex.practicum.mymarket.dto.SortType;
+import ru.yandex.practicum.mymarket.security.CurrentUserService;
 import ru.yandex.practicum.mymarket.service.CatalogService;
 
 import java.util.List;
@@ -26,12 +27,16 @@ import static org.mockito.Mockito.when;
 @ActiveProfiles("test")
 @Import(SecurityConfig.class)
 class CatalogControllerTest {
+    private static final long USER_ID = 1L;
 
     @Autowired
     private WebTestClient webTestClient;
 
     @MockBean
     private CatalogService catalogService;
+
+    @MockBean
+    private CurrentUserService currentUserService;
 
     @Test
     void getRootReturnsItemsViewWithModel() {
@@ -60,6 +65,7 @@ class CatalogControllerTest {
     }
 
     private void stubCatalogPage() {
+        when(currentUserService.currentUserId()).thenReturn(Mono.just(USER_ID));
         ItemCard card = new ItemCard(1L, "t", "", "/img.png", 100L, 0);
         ItemCard placeholder = new ItemCard(-1L, "", "", "", 0L, 0);
         CatalogService.CatalogPageResult result = new CatalogService.CatalogPageResult(
@@ -68,6 +74,6 @@ class CatalogControllerTest {
                 SortType.NO,
                 new Paging(5, 1, false, false)
         );
-        when(catalogService.getItems(anyString(), eq(SortType.NO), eq(1), eq(5))).thenReturn(Mono.just(result));
+        when(catalogService.getItems(anyString(), eq(SortType.NO), eq(1), eq(5), eq(USER_ID))).thenReturn(Mono.just(result));
     }
 }
