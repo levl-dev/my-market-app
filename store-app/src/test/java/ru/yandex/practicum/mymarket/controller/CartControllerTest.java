@@ -4,10 +4,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.config.SecurityConfig;
 import ru.yandex.practicum.mymarket.client.PaymentClient;
 import ru.yandex.practicum.mymarket.dto.CartAction;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
@@ -22,6 +25,7 @@ import static org.mockito.Mockito.when;
 
 @WebFluxTest(controllers = CartController.class)
 @ActiveProfiles("test")
+@Import(SecurityConfig.class)
 class CartControllerTest {
 
     @Autowired
@@ -34,6 +38,7 @@ class CartControllerTest {
     private PaymentClient paymentClient;
 
     @Test
+    @WithMockUser(username = "user")
     void getCartReturnsCartViewWithModel() {
         List<ItemCard> lines = List.of(new ItemCard(1L, "a", "", "/x", 10L, 2));
         when(cartService.getCartItems()).thenReturn(Mono.just(lines));
@@ -49,6 +54,14 @@ class CartControllerTest {
     }
 
     @Test
+    void anonymousCannotOpenCart() {
+        webTestClient.get().uri("/cart/items")
+                .exchange()
+                .expectStatus().is3xxRedirection();
+    }
+
+    @Test
+    @WithMockUser(username = "user")
     void postCartItemsReturnsCartView() {
         List<ItemCard> lines = List.of();
         when(cartService.changeItemCount(eq(3L), eq(CartAction.DELETE))).thenReturn(Mono.empty());

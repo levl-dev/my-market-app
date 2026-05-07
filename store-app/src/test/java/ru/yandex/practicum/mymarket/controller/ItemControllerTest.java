@@ -4,12 +4,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.reactive.function.BodyInserters;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.config.SecurityConfig;
 import ru.yandex.practicum.mymarket.dto.CartAction;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.service.CartService;
@@ -22,6 +25,7 @@ import static org.mockito.Mockito.when;
 
 @WebFluxTest(controllers = ItemController.class)
 @ActiveProfiles("test")
+@Import(SecurityConfig.class)
 class ItemControllerTest {
 
     @Autowired
@@ -48,6 +52,7 @@ class ItemControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "user")
     void postItemsRedirectsToItemsWithQueryParams() {
         when(cartService.changeItemCount(eq(5L), eq(CartAction.PLUS))).thenReturn(Mono.empty());
 
@@ -68,6 +73,7 @@ class ItemControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "user")
     void postItemByIdReturnsItemView() {
         ItemCard after = new ItemCard(2L, "X", "", "", 1L, 1);
         when(itemService.getItem(2L)).thenReturn(Mono.just(after));

@@ -6,8 +6,10 @@ import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.config.SecurityConfig;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
 import ru.yandex.practicum.mymarket.dto.Paging;
 import ru.yandex.practicum.mymarket.dto.SortType;
@@ -22,6 +24,7 @@ import static org.mockito.Mockito.when;
 
 @WebFluxTest(controllers = CatalogController.class)
 @ActiveProfiles("test")
+@Import(SecurityConfig.class)
 class CatalogControllerTest {
 
     @Autowired

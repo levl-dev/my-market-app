@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 
 <head>
     <meta charset="utf-8">
@@ -16,7 +16,11 @@
                     <h2>
                         <span class="badge text-bg-success">Витрина магазина</span>
                     </h2>
-                    <a href="/orders" class="btn btn-secondary ms-auto bi bi-file-earmark-text"> Заказы</a>
+                    <a href="/orders" class="btn btn-secondary ms-auto bi bi-file-earmark-text" sec:authorize="isAuthenticated()"> Заказы</a>
+                    <a href="/login" class="btn btn-outline-secondary" sec:authorize="isAnonymous()">Login</a>
+                    <form action="/logout" method="post" sec:authorize="isAuthenticated()">
+                        <button type="submit" class="btn btn-outline-secondary">Logout</button>
+                    </form>
                     <a href="/items" class="btn btn-secondary bi bi-arrow-left-square"> Главная</a>
                 </div>
             </div>
@@ -31,7 +35,7 @@
                             <span class="badge text-bg-success justify-content-end" th:text="${item.price()}+' руб.'"></span>
                         </h5>
                         <p class="card-text" th:text="${item.description()}"></p>
-                        <form th:action="@{/cart/items}" method="post">
+                        <form th:action="@{/cart/items}" method="post" sec:authorize="isAuthenticated()">
                             <div class="hstack gap-3">
                                 <input type="hidden" name="id" th:value="${item.id()}">
                                 <button type="submit" class="btn btn-outline-secondary" name="action" value="MINUS">-</button>
@@ -46,7 +50,7 @@
         </div>
         <div class="row p-2">
             <div class="col">
-                <form action="/buy" method="post" th:if="${!items.isEmpty()}">
+                <form action="/buy" method="post" th:if="${!items.isEmpty()}" sec:authorize="isAuthenticated()">
                     <div class="hstack gap-3">
                         <span class="text-danger" th:if="${!paymentMessage.isEmpty()}" th:text="${paymentMessage}"></span>
                         <h2 th:text="'Итого: '+${total}+' руб.'"/>

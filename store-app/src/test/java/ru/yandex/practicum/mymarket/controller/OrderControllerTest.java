@@ -4,10 +4,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.config.SecurityConfig;
 import ru.yandex.practicum.mymarket.dto.OrderItemView;
 import ru.yandex.practicum.mymarket.dto.OrderView;
 import ru.yandex.practicum.mymarket.service.OrderService;
@@ -19,6 +22,7 @@ import static org.mockito.Mockito.when;
 
 @WebFluxTest(controllers = OrderController.class)
 @ActiveProfiles("test")
+@Import(SecurityConfig.class)
 class OrderControllerTest {
 
     @Autowired
@@ -28,6 +32,7 @@ class OrderControllerTest {
     private OrderService orderService;
 
     @Test
+    @WithMockUser(username = "user")
     void getOrdersReturnsOrdersView() {
         List<OrderView> orders = List.of(new OrderView(1L, List.of(new OrderItemView(10L, "A", 100L, 1)), 100L));
         when(orderService.getOrders()).thenReturn(Mono.just(orders));
@@ -42,6 +47,7 @@ class OrderControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "user")
     void getOrderByIdReturnsOrderViewAndNewOrderFlag() {
         OrderView order = new OrderView(7L, List.of(), 0L);
         when(orderService.getOrder(7L)).thenReturn(Mono.just(order));
