@@ -49,11 +49,6 @@ public class PaymentWebClientConfig {
         return builder
                 .baseUrl(paymentBaseUrl)
                 .filter(oauth)
-                .filter((request, next) -> {
-                    System.out.println("Request to payment-service: " + request.url());
-                    System.out.println("Authorization header: " + request.headers().getFirst("Authorization"));
-                    return next.exchange(request);
-                })
                 .build();
     }
 }
