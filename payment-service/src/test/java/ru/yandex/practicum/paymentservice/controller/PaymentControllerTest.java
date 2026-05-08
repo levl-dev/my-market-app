@@ -4,10 +4,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.paymentservice.config.SecurityConfig;
 import ru.yandex.practicum.paymentservice.model.BalanceResponse;
 import ru.yandex.practicum.paymentservice.model.PaymentRequest;
 import ru.yandex.practicum.paymentservice.model.PaymentResponse;
@@ -17,9 +20,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockJwt;
 
 @WebFluxTest(controllers = PaymentController.class)
 @ActiveProfiles("test")
+@Import(SecurityConfig.class)
 class PaymentControllerTest {
 
     @Autowired
@@ -29,10 +34,18 @@ class PaymentControllerTest {
     private PaymentService paymentService;
 
     @Test
-    void getBalanceReturnsPayloadFromService() {
+    void getBalanceWithoutAuthReturnsUnauthorized() {
+        webTestClient.get().uri("/balance")
+                .accept(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void getBalanceWithJwtReturnsPayloadFromService() {
         when(paymentService.getBalance()).thenReturn(Mono.just(new BalanceResponse(42L)));
 
-        webTestClient.get().uri("/balance")
+        webTestClient.mutateWith(mockJwt()).get().uri("/balance")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -47,7 +60,7 @@ class PaymentControllerTest {
     void postPaymentDelegatesToServiceAndReturnsJson() {
         when(paymentService.makePayment(eq(100L))).thenReturn(Mono.just(new PaymentResponse(true, 9_900L, "ok")));
 
-        webTestClient.post().uri("/payments")
+        webTestClient.mutateWith(mockJwt()).post().uri("/payments")
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON)
                 .bodyValue(new PaymentRequest(100L))
@@ -63,4 +76,7 @@ class PaymentControllerTest {
 
         verify(paymentService).makePayment(eq(100L));
     }
+
+    @MockBean
+    private ReactiveJwtDecoder reactiveJwtDecoder;
 }

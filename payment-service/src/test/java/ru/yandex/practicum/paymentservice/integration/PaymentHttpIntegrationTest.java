@@ -5,15 +5,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import ru.yandex.practicum.paymentservice.model.BalanceResponse;
 import ru.yandex.practicum.paymentservice.model.PaymentRequest;
 import ru.yandex.practicum.paymentservice.model.PaymentResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockJwt;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
+@ActiveProfiles("test")
 class PaymentHttpIntegrationTest {
 
     @Autowired
@@ -21,13 +24,13 @@ class PaymentHttpIntegrationTest {
 
     @Test
     void paymentFlowShouldUpdateBalance() {
-        webTestClient.get().uri("/balance")
+        webTestClient.mutateWith(mockJwt()).get().uri("/balance")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(BalanceResponse.class)
                 .value(body -> assertThat(body.getBalance()).isEqualTo(10_000L));
 
-        webTestClient.post().uri("/payments")
+        webTestClient.mutateWith(mockJwt()).post().uri("/payments")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new PaymentRequest(2_500L))
                 .exchange()
@@ -38,7 +41,7 @@ class PaymentHttpIntegrationTest {
                     assertThat(body.getBalance()).isEqualTo(7_500L);
                 });
 
-        webTestClient.get().uri("/balance")
+        webTestClient.mutateWith(mockJwt()).get().uri("/balance")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(BalanceResponse.class)
