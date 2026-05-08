@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.userdetails.ReactiveUserDetailsService;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -43,6 +44,9 @@ class ItemControllerTest {
 
     @MockBean
     private CurrentUserService currentUserService;
+
+    @MockBean
+    private ReactiveUserDetailsService reactiveUserDetailsService;
 
     @Test
     void getItemReturnsItemViewAndModel() {
