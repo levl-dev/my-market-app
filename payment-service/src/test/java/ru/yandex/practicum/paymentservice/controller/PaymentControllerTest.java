@@ -17,6 +17,7 @@ import ru.yandex.practicum.paymentservice.model.PaymentResponse;
 import ru.yandex.practicum.paymentservice.service.PaymentService;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,7 +36,7 @@ class PaymentControllerTest {
 
     @Test
     void getBalanceWithoutAuthReturnsUnauthorized() {
-        webTestClient.get().uri("/balance")
+        webTestClient.get().uri("/balance?username=user")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isUnauthorized();
@@ -43,9 +44,9 @@ class PaymentControllerTest {
 
     @Test
     void getBalanceWithJwtReturnsPayloadFromService() {
-        when(paymentService.getBalance()).thenReturn(Mono.just(new BalanceResponse(42L)));
+        when(paymentService.getBalance(eq("user"))).thenReturn(Mono.just(new BalanceResponse(42L)));
 
-        webTestClient.mutateWith(mockJwt()).get().uri("/balance")
+        webTestClient.mutateWith(mockJwt()).get().uri("/balance?username=user")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange()
                 .expectStatus().isOk()
@@ -53,17 +54,17 @@ class PaymentControllerTest {
                 .expectBody(BalanceResponse.class)
                 .value(body -> assertThat(body.getBalance()).isEqualTo(42L));
 
-        verify(paymentService).getBalance();
+        verify(paymentService).getBalance(eq("user"));
     }
 
     @Test
     void postPaymentDelegatesToServiceAndReturnsJson() {
-        when(paymentService.makePayment(eq(100L))).thenReturn(Mono.just(new PaymentResponse(true, 9_900L, "ok")));
+        when(paymentService.makePayment(eq("user"), eq(100L))).thenReturn(Mono.just(new PaymentResponse(true, 9_900L, "ok")));
 
         webTestClient.mutateWith(mockJwt()).post().uri("/payments")
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON)
-                .bodyValue(new PaymentRequest(100L))
+                .bodyValue(new PaymentRequest().username("user").amount(100L))
                 .exchange()
                 .expectStatus().isOk()
                 .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
@@ -74,7 +75,7 @@ class PaymentControllerTest {
                     assertThat(body.getMessage()).isEqualTo("ok");
                 });
 
-        verify(paymentService).makePayment(eq(100L));
+        verify(paymentService).makePayment(eq("user"), eq(100L));
     }
 
     @MockBean

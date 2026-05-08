@@ -18,13 +18,14 @@ import static org.springframework.security.test.web.reactive.server.SecurityMock
 @AutoConfigureWebTestClient
 @ActiveProfiles("test")
 class PaymentHttpIntegrationTest {
+    private static final String USERNAME = "buyer";
 
     @Autowired
     private WebTestClient webTestClient;
 
     @Test
     void paymentFlowShouldUpdateBalance() {
-        webTestClient.mutateWith(mockJwt()).get().uri("/balance")
+        webTestClient.mutateWith(mockJwt()).get().uri("/balance?username={username}", USERNAME)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(BalanceResponse.class)
@@ -32,7 +33,7 @@ class PaymentHttpIntegrationTest {
 
         webTestClient.mutateWith(mockJwt()).post().uri("/payments")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new PaymentRequest(2_500L))
+                .bodyValue(new PaymentRequest().username(USERNAME).amount(2_500L))
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(PaymentResponse.class)
@@ -41,7 +42,7 @@ class PaymentHttpIntegrationTest {
                     assertThat(body.getBalance()).isEqualTo(7_500L);
                 });
 
-        webTestClient.mutateWith(mockJwt()).get().uri("/balance")
+        webTestClient.mutateWith(mockJwt()).get().uri("/balance?username={username}", USERNAME)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(BalanceResponse.class)

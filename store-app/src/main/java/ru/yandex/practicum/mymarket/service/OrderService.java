@@ -14,6 +14,7 @@ import ru.yandex.practicum.mymarket.model.Item;
 import ru.yandex.practicum.mymarket.model.Order;
 import ru.yandex.practicum.mymarket.model.OrderItem;
 import ru.yandex.practicum.mymarket.cache.ItemCacheService;
+import ru.yandex.practicum.mymarket.repository.AppUserRepository;
 import ru.yandex.practicum.mymarket.repository.OrderItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderRepository;
 
@@ -30,17 +31,20 @@ public class OrderService {
     private final ItemCacheService itemCacheService;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final AppUserRepository appUserRepository;
     private final PaymentClient paymentClient;
 
     public Mono<Long> createOrderFromCart(long userId) {
-        return cartService.getCartItemsForOrder(userId)
-                .flatMap(cartItems -> loadItemsById(cartItems)
-                        .flatMap(itemsById -> {
-                            long totalAmount = calculateTotal(cartItems, itemsById);
-                            return paymentClient.pay(totalAmount)
-                                    .flatMap(this::requirePaymentSuccess)
-                                    .then(saveOrder(userId, cartItems, itemsById));
-                        }));
+        return appUserRepository.findById(userId)
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found")))
+                .flatMap(user -> cartService.getCartItemsForOrder(userId)
+                        .flatMap(cartItems -> loadItemsById(cartItems)
+                                .flatMap(itemsById -> {
+                                    long totalAmount = calculateTotal(cartItems, itemsById);
+                                    return paymentClient.pay(user.getUsername(), totalAmount)
+                                            .flatMap(this::requirePaymentSuccess)
+                                            .then(saveOrder(userId, cartItems, itemsById));
+                                })));
     }
 
     private Mono<PaymentResponse> requirePaymentSuccess(PaymentResponse response) {

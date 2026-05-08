@@ -27,4 +27,8 @@ public class CurrentUserService {
     public Mono<Long> currentUserId() {
         return currentUser().map(AppUser::getId);
     }
+
+    public Mono<String> currentUsername() {
+        return currentUser().map(AppUser::getUsername);
+    }
 }

@@ -13,6 +13,12 @@ paths:
     get:
       operationId: getBalance
       summary: Get current balance
+      parameters:
+        - name: username
+          in: query
+          required: true
+          schema:
+            type: string
       responses:
         '200':
           description: Current balance
@@ -54,8 +60,12 @@ components:
     PaymentRequest:
       type: object
       required:
+        - username
         - amount
       properties:
+        username:
+          type: string
+          example: buyer
         amount:
           type: integer
           format: int64

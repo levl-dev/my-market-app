@@ -15,6 +15,7 @@ import ru.yandex.practicum.mymarket.config.SecurityConfig;
 import ru.yandex.practicum.mymarket.client.PaymentClient;
 import ru.yandex.practicum.mymarket.dto.CartAction;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
+import ru.yandex.practicum.mymarket.model.AppUser;
 import ru.yandex.practicum.mymarket.security.CurrentUserService;
 import ru.yandex.practicum.mymarket.service.CartService;
 
@@ -30,6 +31,7 @@ import static org.mockito.Mockito.when;
 @Import(SecurityConfig.class)
 class CartControllerTest {
     private static final long USER_ID = 1L;
+    private static final String USERNAME = "user";
 
     @Autowired
     private WebTestClient webTestClient;
@@ -46,13 +48,20 @@ class CartControllerTest {
     @MockBean
     private ReactiveUserDetailsService reactiveUserDetailsService;
 
+    private static AppUser user() {
+        AppUser user = new AppUser();
+        user.setId(USER_ID);
+        user.setUsername(USERNAME);
+        return user;
+    }
+
     @Test
     @WithMockUser(username = "user")
     void getCartReturnsCartViewWithModel() {
         List<ItemCard> lines = List.of(new ItemCard(1L, "a", "", "/x", 10L, 2));
-        when(currentUserService.currentUserId()).thenReturn(Mono.just(USER_ID));
+        when(currentUserService.currentUser()).thenReturn(Mono.just(user()));
         when(cartService.getCartItems(USER_ID)).thenReturn(Mono.just(lines));
-        when(paymentClient.getBalance()).thenReturn(Mono.just(1_000_000L));
+        when(paymentClient.getBalance(USERNAME)).thenReturn(Mono.just(1_000_000L));
 
         webTestClient.get().uri("/cart/items")
                 .accept(MediaType.TEXT_HTML)
@@ -74,10 +83,10 @@ class CartControllerTest {
     @WithMockUser(username = "user")
     void postCartItemsReturnsCartView() {
         List<ItemCard> lines = List.of();
-        when(currentUserService.currentUserId()).thenReturn(Mono.just(USER_ID));
+        when(currentUserService.currentUser()).thenReturn(Mono.just(user()));
         when(cartService.changeItemCount(eq(USER_ID), eq(3L), eq(CartAction.DELETE))).thenReturn(Mono.empty());
         when(cartService.getCartItems(USER_ID)).thenReturn(Mono.just(lines));
-        when(paymentClient.getBalance()).thenReturn(Mono.just(0L));
+        when(paymentClient.getBalance(USERNAME)).thenReturn(Mono.just(0L));
 
         webTestClient.post().uri("/cart/items?id=3&action=DELETE")
                 .exchange()

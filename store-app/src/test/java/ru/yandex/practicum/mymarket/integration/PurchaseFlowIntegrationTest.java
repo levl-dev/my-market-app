@@ -24,6 +24,7 @@ import ru.yandex.practicum.mymarket.service.OrderService;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
@@ -55,7 +56,7 @@ class PurchaseFlowIntegrationTest {
 
     @BeforeEach
     void cleanDb() {
-        when(paymentClient.pay(anyLong()))
+        when(paymentClient.pay(anyString(), anyLong()))
                 .thenReturn(Mono.just(new PaymentResponse(true, 10_000L, "Payment completed")));
         orderItemRepository.deleteAll()
                 .then(orderRepository.deleteAll())

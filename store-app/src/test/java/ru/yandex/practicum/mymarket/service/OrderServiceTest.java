@@ -14,7 +14,9 @@ import ru.yandex.practicum.mymarket.model.CartItem;
 import ru.yandex.practicum.mymarket.model.Item;
 import ru.yandex.practicum.mymarket.model.Order;
 import ru.yandex.practicum.mymarket.model.OrderItem;
+import ru.yandex.practicum.mymarket.model.AppUser;
 import ru.yandex.practicum.mymarket.cache.ItemCacheService;
+import ru.yandex.practicum.mymarket.repository.AppUserRepository;
 import ru.yandex.practicum.mymarket.repository.OrderItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderRepository;
 
@@ -32,6 +34,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
     private static final long USER_ID = 1L;
+    private static final String USERNAME = "buyer";
 
     @Mock
     private CartService cartService;
@@ -44,6 +47,9 @@ class OrderServiceTest {
 
     @Mock
     private OrderItemRepository orderItemRepository;
+
+    @Mock
+    private AppUserRepository appUserRepository;
 
     @Mock
     private PaymentClient paymentClient;
@@ -80,7 +86,11 @@ class OrderServiceTest {
         });
         when(orderItemRepository.saveAll(anyIterable())).thenReturn(Flux.empty());
         when(cartService.clearCart(USER_ID)).thenReturn(Mono.empty());
-        when(paymentClient.pay(eq(totalPrice)))
+        AppUser user = new AppUser();
+        user.setId(USER_ID);
+        user.setUsername(USERNAME);
+        when(appUserRepository.findById(USER_ID)).thenReturn(Mono.just(user));
+        when(paymentClient.pay(eq(USERNAME), eq(totalPrice)))
                 .thenReturn(Mono.just(new PaymentResponse(true, 9_000L, "Payment completed")));
 
         long id = orderService.createOrderFromCart(USER_ID).block();
@@ -112,6 +122,6 @@ class OrderServiceTest {
         assertThat(second.getCount()).isEqualTo(1);
 
         verify(cartService).clearCart(USER_ID);
-        verify(paymentClient).pay(eq(totalPrice));
+        verify(paymentClient).pay(eq(USERNAME), eq(totalPrice));
     }
 }

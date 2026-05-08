@@ -16,18 +16,20 @@ public class PaymentClient {
         this.paymentWebClient = paymentWebClient;
     }
 
-    public Mono<Long> getBalance() {
+    public Mono<Long> getBalance(String username) {
         return paymentWebClient.get()
-                .uri("/balance")
+                .uri(uriBuilder -> uriBuilder.path("/balance")
+                        .queryParam("username", username)
+                        .build())
                 .retrieve()
                 .bodyToMono(BalanceResponse.class)
                 .map(BalanceResponse::balance);
     }
 
-    public Mono<PaymentResponse> pay(long amount) {
+    public Mono<PaymentResponse> pay(String username, long amount) {
         return paymentWebClient.post()
                 .uri("/payments")
-                .bodyValue(new PaymentRequest(amount))
+                .bodyValue(new PaymentRequest(username, amount))
                 .retrieve()
                 .bodyToMono(PaymentResponse.class);
     }

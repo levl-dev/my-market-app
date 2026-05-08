@@ -29,21 +29,22 @@ public class CartController {
 
     @GetMapping("/cart/items")
     public Mono<Rendering> getCart() {
-        return currentUserService.currentUserId().flatMap(this::renderCart);
+        return currentUserService.currentUser()
+                .flatMap(user -> renderCart(user.getId(), user.getUsername()));
     }
 
     @PostMapping("/cart/items")
     public Mono<Rendering> changeCartItem(@RequestParam long id, @RequestParam CartAction action) {
-        return currentUserService.currentUserId()
-                .flatMap(userId -> cartService.changeItemCount(userId, id, action)
-                        .then(renderCart(userId)));
+        return currentUserService.currentUser()
+                .flatMap(user -> cartService.changeItemCount(user.getId(), id, action)
+                        .then(renderCart(user.getId(), user.getUsername())));
     }
 
-    private Mono<Rendering> renderCart(long userId) {
+    private Mono<Rendering> renderCart(long userId, String username) {
         return cartService.getCartItems(userId)
                 .flatMap(items -> {
                     long total = cartTotal(items);
-                    return paymentClient.getBalance()
+                    return paymentClient.getBalance(username)
                             .map(balance -> balance >= total
                                     ? new CartPaymentState(true, "")
                                     : new CartPaymentState(false, MSG_INSUFFICIENT))

@@ -1,6 +1,7 @@
 package ru.yandex.practicum.paymentservice.service;
 
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.paymentservice.model.BalanceResponse;
@@ -12,13 +13,14 @@ public class PaymentService {
     private static final long INITIAL_BALANCE = 10_000L;
     private static final int MAX_RETRIES = 100;
 
-    private final AtomicLong balance = new AtomicLong(INITIAL_BALANCE);
+    private final ConcurrentHashMap<String, AtomicLong> balances = new ConcurrentHashMap<>();
 
-    public Mono<BalanceResponse> getBalance() {
-        return Mono.just(new BalanceResponse(balance.get()));
+    public Mono<BalanceResponse> getBalance(String username) {
+        return Mono.just(new BalanceResponse(balanceFor(username).get()));
     }
 
-    public Mono<PaymentResponse> makePayment(long amount) {
+    public Mono<PaymentResponse> makePayment(String username, long amount) {
+        AtomicLong balance = balanceFor(username);
         if (amount < 0) {
             return Mono.just(new PaymentResponse(false, balance.get(), "Amount must be non-negative"));
         }
@@ -37,5 +39,9 @@ public class PaymentService {
             Thread.onSpinWait();
         }
         return Mono.just(new PaymentResponse(false, balance.get(), "Payment retry limit exceeded"));
+    }
+
+    private AtomicLong balanceFor(String username) {
+        return balances.computeIfAbsent(username, unused -> new AtomicLong(INITIAL_BALANCE));
     }
 }
