@@ -1,11 +1,12 @@
 package ru.yandex.practicum.mymarket.service;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.client.PaymentClient;
@@ -54,8 +55,24 @@ class OrderServiceTest {
     @Mock
     private PaymentClient paymentClient;
 
-    @InjectMocks
+    @Mock
+    private TransactionalOperator transactionalOperator;
+
     private OrderService orderService;
+
+    @BeforeEach
+    void setUp() {
+        when(transactionalOperator.transactional(any(Flux.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        orderService = new OrderService(
+                cartService,
+                itemCacheService,
+                orderRepository,
+                orderItemRepository,
+                appUserRepository,
+                paymentClient,
+                transactionalOperator);
+    }
 
     @Test
     void createOrderFromCartCopiesSnapshotClearsCartAndReturnsId() {

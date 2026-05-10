@@ -3,6 +3,7 @@ package ru.yandex.practicum.mymarket.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.client.PaymentClient;
@@ -33,6 +34,7 @@ public class OrderService {
     private final OrderItemRepository orderItemRepository;
     private final AppUserRepository appUserRepository;
     private final PaymentClient paymentClient;
+    private final TransactionalOperator transactionalOperator;
 
     public Mono<Long> createOrderFromCart(long userId) {
         return appUserRepository.findById(userId)
@@ -72,7 +74,7 @@ public class OrderService {
 
         List<OrderItem> orderItems = buildOrderItems(cartItems, itemsById);
 
-        return orderRepository.save(order)
+        Mono<Long> persistOrder = orderRepository.save(order)
                 .flatMap(savedOrder -> {
                     for (OrderItem orderItem : orderItems) {
                         orderItem.setOrderId(savedOrder.getId());
@@ -82,6 +84,8 @@ public class OrderService {
                             .then(cartService.clearCart(userId))
                             .thenReturn(savedOrder.getId());
                 });
+
+        return transactionalOperator.transactional(persistOrder.flux()).single();
     }
 
     public Mono<List<OrderView>> getOrders(long userId) {

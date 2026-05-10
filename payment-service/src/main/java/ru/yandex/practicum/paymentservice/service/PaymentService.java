@@ -16,29 +16,31 @@ public class PaymentService {
     private final ConcurrentHashMap<String, AtomicLong> balances = new ConcurrentHashMap<>();
 
     public Mono<BalanceResponse> getBalance(String username) {
-        return Mono.just(new BalanceResponse(balanceFor(username).get()));
+        return Mono.fromSupplier(() -> new BalanceResponse(balanceFor(username).get()));
     }
 
     public Mono<PaymentResponse> makePayment(String username, long amount) {
-        AtomicLong balance = balanceFor(username);
-        if (amount < 0) {
-            return Mono.just(new PaymentResponse(false, balance.get(), "Amount must be non-negative"));
-        }
-        if (amount == 0) {
-            return Mono.just(new PaymentResponse(true, balance.get(), "Payment completed"));
-        }
-        for (int i = 0; i < MAX_RETRIES; i++) {
-            long current = balance.get();
-            if (amount > current) {
-                return Mono.just(new PaymentResponse(false, current, "Not enough balance"));
+        return Mono.defer(() -> {
+            AtomicLong balance = balanceFor(username);
+            if (amount < 0) {
+                return Mono.just(new PaymentResponse(false, balance.get(), "Amount must be non-negative"));
             }
-            long updated = current - amount;
-            if (balance.compareAndSet(current, updated)) {
-                return Mono.just(new PaymentResponse(true, updated, "Payment completed"));
+            if (amount == 0) {
+                return Mono.just(new PaymentResponse(true, balance.get(), "Payment completed"));
             }
-            Thread.onSpinWait();
-        }
-        return Mono.just(new PaymentResponse(false, balance.get(), "Payment retry limit exceeded"));
+            for (int i = 0; i < MAX_RETRIES; i++) {
+                long current = balance.get();
+                if (amount > current) {
+                    return Mono.just(new PaymentResponse(false, current, "Not enough balance"));
+                }
+                long updated = current - amount;
+                if (balance.compareAndSet(current, updated)) {
+                    return Mono.just(new PaymentResponse(true, updated, "Payment completed"));
+                }
+                Thread.onSpinWait();
+            }
+            return Mono.just(new PaymentResponse(false, balance.get(), "Payment retry limit exceeded"));
+        });
     }
 
     private AtomicLong balanceFor(String username) {
