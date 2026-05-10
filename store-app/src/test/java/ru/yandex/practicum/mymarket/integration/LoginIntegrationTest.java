@@ -12,6 +12,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import ru.yandex.practicum.mymarket.model.AppUser;
 import ru.yandex.practicum.mymarket.repository.AppUserRepository;
+import ru.yandex.practicum.mymarket.repository.CartItemRepository;
+import ru.yandex.practicum.mymarket.repository.OrderItemRepository;
+import ru.yandex.practicum.mymarket.repository.OrderRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,11 +30,23 @@ class LoginIntegrationTest {
     private AppUserRepository appUserRepository;
 
     @Autowired
+    private CartItemRepository cartItemRepository;
+
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Autowired
+    private OrderItemRepository orderItemRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void setUpUser() {
-        appUserRepository.deleteAll()
+        orderItemRepository.deleteAll()
+                .then(orderRepository.deleteAll())
+                .then(cartItemRepository.deleteAll())
+                .then(appUserRepository.deleteAll())
                 .then(appUserRepository.save(user("user", "password", true)))
                 .block();
     }
