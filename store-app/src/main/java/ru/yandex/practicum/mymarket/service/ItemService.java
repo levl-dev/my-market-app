@@ -17,10 +17,18 @@ public class ItemService {
     private final CartService cartService;
 
     public Mono<ItemCard> getItem(long id) {
+        return getItem(id, null);
+    }
+
+    public Mono<ItemCard> getItem(long id, Long userId) {
         Mono<Item> itemMono = itemCacheService.findById(id)
                 .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found")));
 
-        return itemMono.flatMap(item -> cartService.getItemCount(item.getId())
+        Mono<Integer> countMono = userId == null
+                ? Mono.just(0)
+                : cartService.getItemCount(userId, id);
+
+        return itemMono.flatMap(item -> countMono
                 .map(count -> new ItemCard(
                         item.getId(),
                         item.getTitle(),

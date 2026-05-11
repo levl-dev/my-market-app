@@ -20,12 +20,14 @@ public class PaymentController implements DefaultApi {
     }
 
     @Override
-    public Mono<ResponseEntity<BalanceResponse>> getBalance(ServerWebExchange exchange) {
-        return paymentService.getBalance().map(ResponseEntity::ok);
+    public Mono<ResponseEntity<BalanceResponse>> getBalance(String username, ServerWebExchange exchange) {
+        return paymentService.getBalance(username).map(ResponseEntity::ok);
     }
 
     @Override
     public Mono<ResponseEntity<PaymentResponse>> makePayment(Mono<PaymentRequest> paymentRequest, ServerWebExchange exchange) {
-        return paymentRequest.flatMap(req -> paymentService.makePayment(req.getAmount())).map(ResponseEntity::ok);
+        return paymentRequest
+                .flatMap(req -> paymentService.makePayment(req.getUsername(), req.getAmount()))
+                .map(ResponseEntity::ok);
     }
 }

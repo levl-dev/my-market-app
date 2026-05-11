@@ -1,11 +1,12 @@
 package ru.yandex.practicum.mymarket.service;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.client.PaymentClient;
@@ -14,7 +15,9 @@ import ru.yandex.practicum.mymarket.model.CartItem;
 import ru.yandex.practicum.mymarket.model.Item;
 import ru.yandex.practicum.mymarket.model.Order;
 import ru.yandex.practicum.mymarket.model.OrderItem;
+import ru.yandex.practicum.mymarket.model.AppUser;
 import ru.yandex.practicum.mymarket.cache.ItemCacheService;
+import ru.yandex.practicum.mymarket.repository.AppUserRepository;
 import ru.yandex.practicum.mymarket.repository.OrderItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderRepository;
 
@@ -31,6 +34,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
+    private static final long USER_ID = 1L;
+    private static final String USERNAME = "buyer";
 
     @Mock
     private CartService cartService;
@@ -45,10 +50,29 @@ class OrderServiceTest {
     private OrderItemRepository orderItemRepository;
 
     @Mock
+    private AppUserRepository appUserRepository;
+
+    @Mock
     private PaymentClient paymentClient;
 
-    @InjectMocks
+    @Mock
+    private TransactionalOperator transactionalOperator;
+
     private OrderService orderService;
+
+    @BeforeEach
+    void setUp() {
+        when(transactionalOperator.transactional(any(Flux.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        orderService = new OrderService(
+                cartService,
+                itemCacheService,
+                orderRepository,
+                orderItemRepository,
+                appUserRepository,
+                paymentClient,
+                transactionalOperator);
+    }
 
     @Test
     void createOrderFromCartCopiesSnapshotClearsCartAndReturnsId() {
@@ -70,7 +94,7 @@ class OrderServiceTest {
 
         long totalPrice = 200L * 2 + 50L * 1;
 
-        when(cartService.getCartItemsForOrder()).thenReturn(Mono.just(List.of(line1, line2)));
+        when(cartService.getCartItemsForOrder(USER_ID)).thenReturn(Mono.just(List.of(line1, line2)));
         when(itemCacheService.findByIds(List.of(10L, 20L))).thenReturn(Mono.just(Map.of(10L, item1, 20L, item2)));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
             Order o = invocation.getArgument(0);
@@ -78,16 +102,21 @@ class OrderServiceTest {
             return Mono.just(o);
         });
         when(orderItemRepository.saveAll(anyIterable())).thenReturn(Flux.empty());
-        when(cartService.clearCart()).thenReturn(Mono.empty());
-        when(paymentClient.pay(eq(totalPrice)))
+        when(cartService.clearCart(USER_ID)).thenReturn(Mono.empty());
+        AppUser user = new AppUser();
+        user.setId(USER_ID);
+        user.setUsername(USERNAME);
+        when(appUserRepository.findById(USER_ID)).thenReturn(Mono.just(user));
+        when(paymentClient.pay(eq(USERNAME), eq(totalPrice)))
                 .thenReturn(Mono.just(new PaymentResponse(true, 9_000L, "Payment completed")));
 
-        long id = orderService.createOrderFromCart().block();
+        long id = orderService.createOrderFromCart(USER_ID).block();
         assertThat(id).isEqualTo(99L);
 
         ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
         verify(orderRepository).save(orderCaptor.capture());
         Order saved = orderCaptor.getValue();
+        assertThat(saved.getUserId()).isEqualTo(USER_ID);
         assertThat(saved.getTotalSum()).isEqualTo(totalPrice);
 
         @SuppressWarnings("unchecked")
@@ -109,7 +138,7 @@ class OrderServiceTest {
         assertThat(second.getPrice()).isEqualTo(50L);
         assertThat(second.getCount()).isEqualTo(1);
 
-        verify(cartService).clearCart();
-        verify(paymentClient).pay(eq(totalPrice));
+        verify(cartService).clearCart(USER_ID);
+        verify(paymentClient).pay(eq(USERNAME), eq(totalPrice));
     }
 }

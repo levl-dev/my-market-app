@@ -7,6 +7,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.cache.ItemCacheService;
@@ -20,9 +25,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("test")
+@Testcontainers
 class ItemCacheServiceIntegrationTest {
 
     private static final String KEY_ITEM_PREFIX = "my-market:item:";
+
+    @Container
+    @SuppressWarnings("resource")
+    static final GenericContainer<?> redisContainer = new GenericContainer<>("redis:7.2").withExposedPorts(6379);
+
+    @DynamicPropertySource
+    static void redisProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.data.redis.host", redisContainer::getHost);
+        registry.add("spring.data.redis.port", () -> redisContainer.getMappedPort(6379));
+    }
 
     @Autowired
     private ItemCacheService itemCacheService;
@@ -40,7 +56,7 @@ class ItemCacheServiceIntegrationTest {
     private OrderItemRepository orderItemRepository;
 
     @Autowired
-    private ReactiveRedisTemplate<String, Item> redis;
+    private ReactiveRedisTemplate<String, Item> redisTemplate;
 
     @BeforeEach
     void cleanStorage() {
@@ -61,8 +77,8 @@ class ItemCacheServiceIntegrationTest {
         assertThat(loaded).isNotNull();
         assertThat(loaded.getId()).isEqualTo(saved.getId());
         String key = KEY_ITEM_PREFIX + saved.getId();
-        assertThat(redis.hasKey(key).block()).isTrue();
-        Item cached = redis.opsForValue().get(key).block();
+        assertThat(redisTemplate.hasKey(key).block()).isTrue();
+        Item cached = redisTemplate.opsForValue().get(key).block();
         assertThat(cached).isNotNull();
         assertThat(cached.getId()).isEqualTo(saved.getId());
         assertThat(cached.getTitle()).isEqualTo(saved.getTitle());
@@ -73,9 +89,9 @@ class ItemCacheServiceIntegrationTest {
                 .match(KEY_ITEM_PREFIX + "*")
                 .count(1000)
                 .build();
-        return redis.scan(options)
+        return redisTemplate.scan(options)
                 .collectList()
-                .flatMap(keys -> keys.isEmpty() ? Mono.empty() : redis.delete(Flux.fromIterable(keys)).then())
+                .flatMap(keys -> keys.isEmpty() ? Mono.empty() : redisTemplate.delete(Flux.fromIterable(keys)).then())
                 .then();
     }
 

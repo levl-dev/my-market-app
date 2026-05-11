@@ -30,6 +30,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class CartServiceTest {
+    private static final long USER_ID = 1L;
 
     @Mock
     private CartItemRepository cartItemRepository;
@@ -47,7 +48,7 @@ class CartServiceTest {
 
     @Test
     void plusAddsNewCartLineWhenItemWasNotInCart() {
-        when(cartItemRepository.findByItemId(1L)).thenReturn(Mono.empty());
+        when(cartItemRepository.findByUserIdAndItemId(USER_ID, 1L)).thenReturn(Mono.empty());
         Item item = new Item();
         item.setId(1L);
         item.setTitle("T");
@@ -57,10 +58,11 @@ class CartServiceTest {
                 .when(cartItemRepository)
                 .save(any(CartItem.class));
 
-        cartService.changeItemCount(1L, CartAction.PLUS).block();
+        cartService.changeItemCount(USER_ID, 1L, CartAction.PLUS).block();
 
         ArgumentCaptor<CartItem> captor = ArgumentCaptor.forClass(CartItem.class);
         verify(cartItemRepository).save(captor.capture());
+        assertThat(captor.getValue().getUserId()).isEqualTo(USER_ID);
         assertThat(captor.getValue().getItemId()).isEqualTo(1L);
         assertThat(captor.getValue().getCount()).isEqualTo(1);
     }
@@ -70,12 +72,12 @@ class CartServiceTest {
         CartItem existing = new CartItem();
         existing.setItemId(2L);
         existing.setCount(3);
-        when(cartItemRepository.findByItemId(2L)).thenReturn(Mono.just(existing));
+        when(cartItemRepository.findByUserIdAndItemId(USER_ID, 2L)).thenReturn(Mono.just(existing));
         doAnswer(invocation -> Mono.just(invocation.getArgument(0)))
                 .when(cartItemRepository)
                 .save(any(CartItem.class));
 
-        cartService.changeItemCount(2L, CartAction.PLUS).block();
+        cartService.changeItemCount(USER_ID, 2L, CartAction.PLUS).block();
 
         verify(cartItemRepository).save(existing);
         assertThat(existing.getCount()).isEqualTo(4);
@@ -86,10 +88,10 @@ class CartServiceTest {
         CartItem existing = new CartItem();
         existing.setItemId(3L);
         existing.setCount(2);
-        when(cartItemRepository.findByItemId(3L)).thenReturn(Mono.just(existing));
+        when(cartItemRepository.findByUserIdAndItemId(USER_ID, 3L)).thenReturn(Mono.just(existing));
         when(cartItemRepository.save(existing)).thenReturn(Mono.just(existing));
 
-        cartService.changeItemCount(3L, CartAction.MINUS).block();
+        cartService.changeItemCount(USER_ID, 3L, CartAction.MINUS).block();
 
         verify(cartItemRepository).save(existing);
         verify(cartItemRepository, never()).delete(any());
@@ -101,10 +103,10 @@ class CartServiceTest {
         CartItem existing = new CartItem();
         existing.setItemId(4L);
         existing.setCount(1);
-        when(cartItemRepository.findByItemId(4L)).thenReturn(Mono.just(existing));
+        when(cartItemRepository.findByUserIdAndItemId(USER_ID, 4L)).thenReturn(Mono.just(existing));
         when(cartItemRepository.delete(existing)).thenReturn(Mono.empty());
 
-        cartService.changeItemCount(4L, CartAction.MINUS).block();
+        cartService.changeItemCount(USER_ID, 4L, CartAction.MINUS).block();
 
         verify(cartItemRepository).delete(existing);
         verify(cartItemRepository, never()).save(any());
@@ -113,29 +115,29 @@ class CartServiceTest {
     @Test
     void deleteRemovesCartLineWhenPresent() {
         CartItem existing = new CartItem();
-        when(cartItemRepository.findByItemId(5L)).thenReturn(Mono.just(existing));
+        when(cartItemRepository.findByUserIdAndItemId(USER_ID, 5L)).thenReturn(Mono.just(existing));
         when(cartItemRepository.delete(existing)).thenReturn(Mono.empty());
 
-        cartService.changeItemCount(5L, CartAction.DELETE).block();
+        cartService.changeItemCount(USER_ID, 5L, CartAction.DELETE).block();
 
         verify(cartItemRepository).delete(existing);
     }
 
     @Test
     void deleteDoesNothingWhenLineAbsent() {
-        when(cartItemRepository.findByItemId(6L)).thenReturn(Mono.empty());
+        when(cartItemRepository.findByUserIdAndItemId(USER_ID, 6L)).thenReturn(Mono.empty());
 
-        cartService.changeItemCount(6L, CartAction.DELETE).block();
+        cartService.changeItemCount(USER_ID, 6L, CartAction.DELETE).block();
 
         verify(cartItemRepository, never()).delete(any());
     }
 
     @Test
     void plusThrowsWhenItemDoesNotExist() {
-        when(cartItemRepository.findByItemId(7L)).thenReturn(Mono.empty());
+        when(cartItemRepository.findByUserIdAndItemId(USER_ID, 7L)).thenReturn(Mono.empty());
         when(itemCacheService.findById(7L)).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> cartService.changeItemCount(7L, CartAction.PLUS).block())
+        assertThatThrownBy(() -> cartService.changeItemCount(USER_ID, 7L, CartAction.PLUS).block())
                 .isInstanceOf(ResponseStatusException.class);
 
         verify(cartItemRepository, never()).save(any());
@@ -157,9 +159,9 @@ class CartServiceTest {
         cb.setItemId(2L);
         cb.setCount(1);
 
-        when(cartItemRepository.findAllByOrderByIdAsc()).thenReturn(Flux.just(ca, cb));
+        when(cartItemRepository.findAllByUserIdOrderByIdAsc(USER_ID)).thenReturn(Flux.just(ca, cb));
         when(itemCacheService.findByIds(List.of(1L, 2L))).thenReturn(Mono.just(Map.of(1L, a, 2L, b)));
 
-        assertThat(cartService.getTotal().block()).isEqualTo(100L * 2 + 50L * 1);
+        assertThat(cartService.getTotal(USER_ID).block()).isEqualTo(100L * 2 + 50L * 1);
     }
 }

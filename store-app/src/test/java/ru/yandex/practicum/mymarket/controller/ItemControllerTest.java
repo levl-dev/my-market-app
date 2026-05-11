@@ -4,14 +4,21 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.userdetails.ReactiveUserDetailsService;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.reactive.function.BodyInserters;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.config.SecurityConfig;
 import ru.yandex.practicum.mymarket.dto.CartAction;
 import ru.yandex.practicum.mymarket.dto.ItemCard;
+import ru.yandex.practicum.mymarket.security.CurrentUserService;
 import ru.yandex.practicum.mymarket.service.CartService;
 import ru.yandex.practicum.mymarket.service.ItemService;
 
@@ -22,7 +29,9 @@ import static org.mockito.Mockito.when;
 
 @WebFluxTest(controllers = ItemController.class)
 @ActiveProfiles("test")
+@Import(SecurityConfig.class)
 class ItemControllerTest {
+    private static final long USER_ID = 1L;
 
     @Autowired
     private WebTestClient webTestClient;
@@ -33,9 +42,16 @@ class ItemControllerTest {
     @MockBean
     private ItemService itemService;
 
+    @MockBean
+    private CurrentUserService currentUserService;
+
+    @MockBean
+    private ReactiveUserDetailsService reactiveUserDetailsService;
+
     @Test
     void getItemReturnsItemViewAndModel() {
         ItemCard card = new ItemCard(1L, "Title", "Desc", "/i.png", 200L, 3);
+        when(currentUserService.currentUserId()).thenReturn(Mono.error(new ResponseStatusException(HttpStatus.UNAUTHORIZED)));
         when(itemService.getItem(1L)).thenReturn(Mono.just(card));
 
         webTestClient.get().uri("/items/{id}", 1L)
@@ -48,8 +64,10 @@ class ItemControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "user")
     void postItemsRedirectsToItemsWithQueryParams() {
-        when(cartService.changeItemCount(eq(5L), eq(CartAction.PLUS))).thenReturn(Mono.empty());
+        when(currentUserService.currentUserId()).thenReturn(Mono.just(USER_ID));
+        when(cartService.changeItemCount(eq(USER_ID), eq(5L), eq(CartAction.PLUS))).thenReturn(Mono.empty());
 
         webTestClient.post().uri("/items")
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
@@ -64,14 +82,16 @@ class ItemControllerTest {
                 .expectHeader().value(HttpHeaders.LOCATION, location ->
                         assertThat(location).endsWith("/items?search=foo&sort=NO&pageNumber=2&pageSize=10"));
 
-        verify(cartService).changeItemCount(eq(5L), eq(CartAction.PLUS));
+        verify(cartService).changeItemCount(eq(USER_ID), eq(5L), eq(CartAction.PLUS));
     }
 
     @Test
+    @WithMockUser(username = "user")
     void postItemByIdReturnsItemView() {
         ItemCard after = new ItemCard(2L, "X", "", "", 1L, 1);
-        when(itemService.getItem(2L)).thenReturn(Mono.just(after));
-        when(cartService.changeItemCount(eq(2L), eq(CartAction.MINUS))).thenReturn(Mono.empty());
+        when(currentUserService.currentUserId()).thenReturn(Mono.just(USER_ID));
+        when(itemService.getItem(2L, USER_ID)).thenReturn(Mono.just(after));
+        when(cartService.changeItemCount(eq(USER_ID), eq(2L), eq(CartAction.MINUS))).thenReturn(Mono.empty());
 
         webTestClient.post().uri("/items/{id}", 2L)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
@@ -82,6 +102,6 @@ class ItemControllerTest {
                 .expectBody(String.class)
                 .value(body -> assertThat(body).contains("X"));
 
-        verify(cartService).changeItemCount(eq(2L), eq(CartAction.MINUS));
+        verify(cartService).changeItemCount(eq(USER_ID), eq(2L), eq(CartAction.MINUS));
     }
 }

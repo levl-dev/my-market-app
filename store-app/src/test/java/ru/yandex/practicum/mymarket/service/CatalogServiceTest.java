@@ -18,11 +18,13 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class CatalogServiceTest {
+    private static final long USER_ID = 1L;
 
     @Mock
     private ItemRepository itemRepository;
@@ -37,9 +39,9 @@ class CatalogServiceTest {
     void blankSearchUsesPageQuery() {
         when(itemRepository.countBySearch("")).thenReturn(Mono.just(0L));
         when(itemRepository.findPageOrderById("", 5, 0L)).thenReturn(Flux.empty());
-        when(cartService.getItemCounts(any())).thenReturn(emptyCounts());
+        when(cartService.getItemCounts(eq(USER_ID), any())).thenReturn(emptyCounts());
 
-        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 5).block();
+        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 5, USER_ID).block();
 
         assertThat(result).isNotNull();
         assertThat(result.items()).isNotEmpty();
@@ -51,9 +53,9 @@ class CatalogServiceTest {
     void nonBlankSearchUsesPageQueryWithSearch() {
         when(itemRepository.countBySearch("q")).thenReturn(Mono.just(0L));
         when(itemRepository.findPageOrderById("q", 5, 0L)).thenReturn(Flux.empty());
-        when(cartService.getItemCounts(any())).thenReturn(emptyCounts());
+        when(cartService.getItemCounts(eq(USER_ID), any())).thenReturn(emptyCounts());
 
-        CatalogService.CatalogPageResult result = catalogService.getItems("q", SortType.NO, 1, 5).block();
+        CatalogService.CatalogPageResult result = catalogService.getItems("q", SortType.NO, 1, 5, USER_ID).block();
 
         assertThat(result).isNotNull();
         verify(itemRepository).countBySearch("q");
@@ -66,9 +68,9 @@ class CatalogServiceTest {
         Item second = item(2L, "a", 10L);
         when(itemRepository.countBySearch("")).thenReturn(Mono.just(2L));
         when(itemRepository.findPageOrderById("", 10, 0L)).thenReturn(Flux.just(first, second));
-        when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0)));
+        when(cartService.getItemCounts(eq(USER_ID), any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0)));
 
-        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 10).block();
+        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 10, USER_ID).block();
         List<ItemCard> flat = flatten(result);
 
         assertThat(flat).extracting(ItemCard::id).containsExactly(1L, 2L);
@@ -80,9 +82,9 @@ class CatalogServiceTest {
         Item second = item(2L, "a", 10L);
         when(itemRepository.countBySearch("")).thenReturn(Mono.just(2L));
         when(itemRepository.findPageOrderByTitle("", 10, 0L)).thenReturn(Flux.just(second, first));
-        when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0)));
+        when(cartService.getItemCounts(eq(USER_ID), any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0)));
 
-        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.ALPHA, 1, 10).block();
+        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.ALPHA, 1, 10, USER_ID).block();
         List<ItemCard> flat = flatten(result);
 
         assertThat(flat).extracting(ItemCard::title).containsExactly("a", "b");
@@ -94,9 +96,9 @@ class CatalogServiceTest {
         Item second = item(2L, "b", 10L);
         when(itemRepository.countBySearch("")).thenReturn(Mono.just(2L));
         when(itemRepository.findPageOrderByPrice("", 10, 0L)).thenReturn(Flux.just(second, first));
-        when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0)));
+        when(cartService.getItemCounts(eq(USER_ID), any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0)));
 
-        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.PRICE, 1, 10).block();
+        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.PRICE, 1, 10, USER_ID).block();
         List<ItemCard> flat = flatten(result);
 
         assertThat(flat).extracting(ItemCard::price).containsExactly(10L, 30L);
@@ -116,9 +118,9 @@ class CatalogServiceTest {
         }
         when(itemRepository.countBySearch("")).thenReturn(Mono.just(4L));
         when(itemRepository.findPageOrderById("", 10, 0L)).thenReturn(Flux.fromIterable(content));
-        when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0, 3L, 0, 4L, 0)));
+        when(cartService.getItemCounts(eq(USER_ID), any())).thenReturn(Mono.just(Map.of(1L, 0, 2L, 0, 3L, 0, 4L, 0)));
 
-        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 10).block();
+        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 10, USER_ID).block();
 
         assertThat(result.items()).hasSize(2);
         assertThat(result.items().get(0)).hasSize(3);
@@ -133,9 +135,9 @@ class CatalogServiceTest {
     void emptyCatalogPageYieldsSingleRowOfPlaceholderCards() {
         when(itemRepository.countBySearch("")).thenReturn(Mono.just(0L));
         when(itemRepository.findPageOrderById("", 5, 0L)).thenReturn(Flux.empty());
-        when(cartService.getItemCounts(any())).thenReturn(Mono.just(Map.of()));
+        when(cartService.getItemCounts(eq(USER_ID), any())).thenReturn(Mono.just(Map.of()));
 
-        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 5).block();
+        CatalogService.CatalogPageResult result = catalogService.getItems("", SortType.NO, 1, 5, USER_ID).block();
 
         assertThat(result.items()).hasSize(1);
         assertThat(result.items().get(0)).hasSize(3);

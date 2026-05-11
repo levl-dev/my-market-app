@@ -21,8 +21,8 @@ public class CartService {
     private final CartItemRepository cartItemRepository;
     private final ItemCacheService itemCacheService;
 
-    public Mono<Void> changeItemCount(long itemId, CartAction action) {
-        Mono<CartItem> cartItemMono = cartItemRepository.findByItemId(itemId);
+    public Mono<Void> changeItemCount(long userId, long itemId, CartAction action) {
+        Mono<CartItem> cartItemMono = cartItemRepository.findByUserIdAndItemId(userId, itemId);
         if (action == CartAction.DELETE) {
             return cartItemMono.flatMap(cartItemRepository::delete).then();
         }
@@ -38,6 +38,7 @@ public class CartService {
                                     .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found")))
                                     .flatMap(item -> {
                                         CartItem created = new CartItem();
+                                        created.setUserId(userId);
                                         created.setItemId(item.getId());
                                         created.setCount(1);
                                         return cartItemRepository.save(created);
@@ -56,16 +57,16 @@ public class CartService {
         }).then();
     }
 
-    public Mono<Integer> getItemCount(long itemId) {
-        return cartItemRepository.findByItemId(itemId).map(CartItem::getCount).defaultIfEmpty(0);
+    public Mono<Integer> getItemCount(long userId, long itemId) {
+        return cartItemRepository.findByUserIdAndItemId(userId, itemId).map(CartItem::getCount).defaultIfEmpty(0);
     }
 
-    public Mono<Map<Long, Integer>> getItemCounts(Collection<Long> itemIds) {
+    public Mono<Map<Long, Integer>> getItemCounts(long userId, Collection<Long> itemIds) {
         if (itemIds.isEmpty()) {
             return Mono.just(Map.of());
         }
 
-        return cartItemRepository.findByItemIdIn(itemIds)
+        return cartItemRepository.findByUserIdAndItemIdIn(userId, itemIds)
                 .collectList()
                 .map(cartItems -> {
                     Map<Long, Integer> counts = new HashMap<>();
@@ -78,8 +79,8 @@ public class CartService {
                 });
     }
 
-    public Mono<List<ItemCard>> getCartItems() {
-        return cartItemRepository.findAllByOrderByIdAsc()
+    public Mono<List<ItemCard>> getCartItems(long userId) {
+        return cartItemRepository.findAllByUserIdOrderByIdAsc(userId)
                 .collectList()
                 .flatMap(cartItems -> {
                     if (cartItems.isEmpty()) {
@@ -104,19 +105,19 @@ public class CartService {
                 });
     }
 
-    public Mono<Long> getTotal() {
-        return getCartItems()
+    public Mono<Long> getTotal(long userId) {
+        return getCartItems(userId)
                 .map(items -> items.stream()
                         .mapToLong(item -> item.price() * item.count())
                         .sum());
     }
 
-    public Mono<List<CartItem>> getCartItemsForOrder() {
-        return cartItemRepository.findAllByOrderByIdAsc().collectList();
+    public Mono<List<CartItem>> getCartItemsForOrder(long userId) {
+        return cartItemRepository.findAllByUserIdOrderByIdAsc(userId).collectList();
     }
 
-    public Mono<Void> clearCart() {
-        return cartItemRepository.deleteAll();
+    public Mono<Void> clearCart(long userId) {
+        return cartItemRepository.deleteAllByUserId(userId);
     }
 
     private ItemCard toItemCard(CartItem cartItem, Item item) {

@@ -5,25 +5,19 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Table;
-import org.springframework.data.relational.core.mapping.Column;
 
-import java.time.LocalDateTime;
-
-@Table("orders")
+@Table("app_users")
 @Getter
 @Setter
 @NoArgsConstructor
-public class Order {
+public class AppUser {
 
     @Id
     private Long id;
 
-    @Column("user_id")
-    private Long userId;
+    private String username;
 
-    @Column("total_sum")
-    private long totalSum;
+    private String password;
 
-    @Column("created_at")
-    private LocalDateTime createdAt;
+    private boolean enabled;
 }
